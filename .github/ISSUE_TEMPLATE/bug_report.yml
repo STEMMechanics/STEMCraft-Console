@@ -31,9 +31,9 @@ body:
   - type: input
     id: version
     attributes:
-      label: Fabricator version
-      description: Shown in the panel sidebar, or run `fabricator version`.
-      placeholder: v0.5.2
+      label: STEMCraft Console version
+      description: Shown in System Settings or returned by `/api/version`.
+      placeholder: 0.1.2
     validations:
       required: true
 
@@ -42,8 +42,8 @@ body:
     attributes:
       label: Install method
       options:
-        - Docker
-        - One-line installer (systemd)
+        - One-line installer
+        - Local install script
         - Manual / from source
         - Other
     validations:
@@ -53,22 +53,19 @@ body:
     id: os
     attributes:
       label: Operating system
-      description: Distro and version. For Docker, the host OS.
-      placeholder: Debian 12
+      description: Include the Linux distribution and version for production installs.
+      placeholder: Ubuntu 24.04
     validations:
       required: true
 
   - type: dropdown
-    id: loader
+    id: process-backend
     attributes:
-      label: Server loader
-      description: If the bug isn't tied to a specific server, pick "Not applicable".
+      label: Minecraft process backend
+      description: If the bug is not tied to a server, choose "Not applicable".
       options:
-        - Fabric
-        - Quilt
-        - NeoForge
-        - Forge
-        - Vanilla
+        - systemd
+        - Direct subprocess (development)
         - Not applicable
     validations:
       required: true
@@ -84,13 +81,13 @@ body:
     attributes:
       label: Logs
       description: |
-        Relevant output from the Fabricator log, and the Minecraft server log if
-        the bug involves a server. systemd installs: `journalctl -u fabricator -n 200`.
-        Docker: `docker compose logs --tail 200`. This will be formatted as code.
+        Relevant panel output and the Minecraft server log if applicable.
+        Panel logs: `sudo stemcraft-console logs`. Minecraft service logs:
+        `sudo stemcraft-console server NAME logs`. Remove secrets and player IPs.
       render: shell
 
   - type: textarea
     id: extra
     attributes:
       label: Anything else
-      description: Screenshots, reverse proxy setup, anything unusual about your environment.
+      description: Screenshots, reverse-proxy details, browser version, or anything unusual about the environment.

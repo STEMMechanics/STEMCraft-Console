@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck disable=SC1091
+source "$SOURCE_DIR/scripts/common.sh"
+banner "STEMCraft Console Upgrade"
+
 if [[ ${EUID} -ne 0 ]]; then
   echo "Run this upgrade as root." >&2
   exit 1
 fi
 
-SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 INSTALL_DIR=/opt/stemcraft-console
 BACKUP_DIR=/var/lib/stemcraft-console/upgrades/$(date -u +%Y%m%dT%H%M%SZ)
 
@@ -27,9 +31,11 @@ fi
   exit 1
 }
 
+section "Creating rollback snapshot"
 install -d -o stemcraft -g stemcraft "$BACKUP_DIR"
 cp -a "$INSTALL_DIR/app" "$INSTALL_DIR/migrations" "$INSTALL_DIR/alembic.ini" "$INSTALL_DIR/requirements.txt" "$BACKUP_DIR/"
 cp -a /var/lib/stemcraft-console/stemcraft-console.db "$BACKUP_DIR/" 2>/dev/null || true
+section "Installing application update"
 systemctl stop stemcraft-console.service
 rm -rf "$INSTALL_DIR/app" "$INSTALL_DIR/migrations"
 cp -R "$SOURCE_DIR/app" "$SOURCE_DIR/migrations" "$SOURCE_DIR/alembic.ini" "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/"
@@ -40,11 +46,24 @@ install -m 0644 "$SOURCE_DIR/deploy/50-stemcraft-console.rules" /etc/polkit-1/ru
 install -m 0755 "$SOURCE_DIR/deploy/stemcraft-console" /usr/local/sbin/stemcraft-console
 chown -R stemcraft:stemcraft "$INSTALL_DIR"
 systemctl daemon-reload
+section "Starting STEMCraft Console"
 systemctl start stemcraft-console.service
 
 READY=false
+CONFIG_FILE=/etc/stemcraft-console/console.env
+WEB_HOST=$(sed -n 's/^STEMCRAFT_CONSOLE_HOST=//p' "$CONFIG_FILE" | tail -1)
+WEB_PORT=$(sed -n 's/^STEMCRAFT_CONSOLE_PORT=//p' "$CONFIG_FILE" | tail -1)
+WEB_HOST=${WEB_HOST:-127.0.0.1}
+WEB_PORT=${WEB_PORT:-8000}
+[[ "$WEB_HOST" == "0.0.0.0" ]] && WEB_HOST=127.0.0.1
+[[ "$WEB_HOST" == "::" ]] && WEB_HOST=::1
+if [[ "$WEB_HOST" == *:* ]]; then
+  HEALTH_URL="http://[$WEB_HOST]:$WEB_PORT/health"
+else
+  HEALTH_URL="http://$WEB_HOST:$WEB_PORT/health"
+fi
 for _attempt in {1..30}; do
-  if curl --fail --silent http://127.0.0.1:8000/health >/dev/null; then
+  if curl --fail --silent --globoff --noproxy '*' "$HEALTH_URL" >/dev/null; then
     READY=true
     break
   fi
@@ -54,9 +73,11 @@ for _attempt in {1..30}; do
   sleep 1
 done
 if [[ "$READY" != true ]]; then
-  echo "The upgraded service did not become healthy. Roll back with: sudo $SOURCE_DIR/scripts/rollback.sh $BACKUP_DIR" >&2
+  error "The upgraded service did not become healthy."
+  echo "Roll back with: sudo $SOURCE_DIR/scripts/rollback.sh $BACKUP_DIR" >&2
   journalctl -u stemcraft-console.service --no-pager -n 30 >&2
   exit 1
 fi
 
-echo "Upgrade complete. Rollback files are in $BACKUP_DIR"
+banner "STEMCraft Console upgrade complete"
+info "Rollback files: $BACKUP_DIR"

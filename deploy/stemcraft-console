@@ -5,6 +5,7 @@ usage() {
   cat <<'EOF'
 Usage:
   stemcraft-console {status|start|stop|restart|logs}
+  stemcraft-console reset-password [USERNAME]
   stemcraft-console server NAME {status|start|stop|restart|logs}
 
 The server NAME is the systemd service name configured in the panel.
@@ -29,7 +30,22 @@ run_unit_command() {
   esac
 }
 
-if [[ ${1:-} == server ]]; then
+if [[ ${1:-} == reset-password ]]; then
+  [[ $# -le 2 ]] || { usage >&2; exit 2; }
+  if [[ ${EUID} -ne 0 ]]; then
+    echo "The 'reset-password' action must be run as root." >&2
+    exit 1
+  fi
+  username=${2:-admin}
+  [[ "$username" =~ ^[A-Za-z0-9_.@-]{1,64}$ ]] || {
+    echo "Invalid username." >&2
+    exit 2
+  }
+  cd /opt/stemcraft-console
+  exec runuser -u stemcraft -- env \
+    STEMCRAFT_CONSOLE_ENV=/etc/stemcraft-console/console.env \
+    /opt/stemcraft-console/.venv/bin/python -m app.admin_cli reset-password "$username"
+elif [[ ${1:-} == server ]]; then
   [[ $# -eq 3 ]] || { usage >&2; exit 2; }
   name=$2
   [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}$ ]] || {
