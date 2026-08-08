@@ -89,7 +89,7 @@ world_the_end/
 plugins/
 cache/
 libraries/
-versions/
+/minecraft-servers/**/versions/
 
 banned-ips.json
 banned-players.json

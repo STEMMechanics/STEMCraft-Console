@@ -16,6 +16,12 @@ for required in app migrations alembic.ini requirements.txt deploy/stemcraft-con
     exit 1
   }
 done
+
+MIGRATION_FILE=$(find "$SOURCE_DIR/migrations/versions" -maxdepth 1 -type f -name '*.py' -print -quit 2>/dev/null || true)
+if [[ -z "$MIGRATION_FILE" ]]; then
+  echo "Upgrade source is incomplete: no database migrations were found." >&2
+  exit 1
+fi
 [[ -x "$INSTALL_DIR/.venv/bin/python" ]] || {
   echo "STEMCraft Console is not installed in $INSTALL_DIR." >&2
   exit 1
