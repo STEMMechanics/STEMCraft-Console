@@ -80,6 +80,9 @@ def test_process_stats_reuses_psutil_process_for_cpu_deltas(monkeypatch):
             self.calls += 1
             return 0 if self.calls == 1 else 12.5
 
+        def create_time(self):
+            return 1000
+
         def memory_info(self):
             return SimpleNamespace(rss=1024)
 
@@ -90,12 +93,15 @@ def test_process_stats_reuses_psutil_process_for_cpu_deltas(monkeypatch):
     monkeypatch.setattr(processes.psutil, "Process", FakeProcess)
     processes.stats_processes.pop(99, None)
     processes.stats_process_roots.pop(99, None)
+    processes.stats_process_started_at.pop(99, None)
+    monkeypatch.setattr(processes.time, "time", lambda: 1123)
 
     processes.server_process_stats(99)
     result = processes.server_process_stats(99)
 
     assert len(created) == 1
     assert result["cpu_percent"] == 12.5
+    assert result["uptime_seconds"] == 123
 
 
 def test_systemd_process_stats_measure_minecraft_child(monkeypatch):
@@ -112,6 +118,9 @@ def test_systemd_process_stats_measure_minecraft_child(monkeypatch):
             self.calls += 1
             return 0 if self.calls == 1 else self.cpu
 
+        def create_time(self):
+            return 2000
+
         def memory_info(self):
             return SimpleNamespace(rss=2048)
 
@@ -125,9 +134,12 @@ def test_systemd_process_stats_measure_minecraft_child(monkeypatch):
     monkeypatch.setattr(processes.psutil, "Process", lambda pid: supervisor)
     processes.stats_processes.pop(1000, None)
     processes.stats_process_roots.pop(1000, None)
+    processes.stats_process_started_at.pop(1000, None)
+    monkeypatch.setattr(processes.time, "time", lambda: 2125)
 
     processes.server_process_stats(1000)
     result = processes.server_process_stats(1000)
 
     assert result["cpu_percent"] == 37.5
     assert result["memory_used"] == 2048
+    assert result["uptime_seconds"] == 125
