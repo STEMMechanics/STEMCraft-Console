@@ -1,36 +1,59 @@
 <div class="server-import-page" data-page-title="Import Server">
   <section class="overview-card settings-section">
-    <div class="card-header"><span>Detected servers</span></div>
-    <div class="settings-content">
+    <div class="card-header">
+      <span>Detected Servers</span>
+      <small class="muted-small">Scanning {{ server_root }}</small>
+    </div>
+    <div class="settings-content import-detected-list">
       {% if detected_servers %}
         {% for detected in detected_servers %}
-        <form class="import-server-row" method="post" action="/servers/import">
-          <input name="name" value="{{ detected.name }}" required>
-          <input name="directory" value="{{ detected.directory }}" readonly required>
-          <input name="jar_name" value="{{ detected.jar_name }}" required>
-          <input name="port" type="number" min="1" max="65535" value="{{ detected.port }}" required>
-          <select name="memory"><option>2G</option><option>4G</option><option>8G</option></select>
-          <select name="process_backend"><option value="systemd" selected>Production (systemd)</option><option value="subprocess">Development (panel-owned)</option></select>
-          <button class="button" type="submit">Import</button>
+        <form class="import-server-card" method="post" action="/servers/import">
+          <div class="import-server-heading">
+            <div>
+              <strong>{{ detected.name }}</strong>
+              <code>{{ detected.directory }}</code>
+            </div>
+            <span class="status-pill {{ 'active' if detected.ready else 'disabled' }}">
+              {{ 'Ready' if detected.ready else 'Needs attention' }}
+            </span>
+          </div>
+          <div class="import-server-facts">
+            <span>JAR <strong>{{ detected.jar_name }}</strong></span>
+            <span>Port <strong>{{ detected.port }}</strong></span>
+            <span>Owner <strong>{{ detected.owner }}</strong></span>
+            <span>Service <strong>{{ detected.service.unit if detected.service else 'None detected' }}</strong></span>
+          </div>
+          {% for error in detected.errors %}<p class="import-check error"><i class="fa-solid fa-circle-xmark"></i> {{ error }}</p>{% endfor %}
+          {% for warning in detected.warnings %}<p class="import-check warning"><i class="fa-solid fa-triangle-exclamation"></i> {{ warning }}</p>{% endfor %}
+          <input type="hidden" name="directory" value="{{ detected.directory }}">
+          <div class="import-server-fields">
+            <label class="property-field"><span>Panel name</span><input name="name" value="{{ detected.name }}" required></label>
+            <label class="property-field"><span>Memory</span><select name="memory"><option>2G</option><option selected>4G</option><option>8G</option><option>16G</option></select></label>
+            <input type="hidden" name="process_backend" value="systemd">
+            <button class="button start" type="submit" {% if not detected.ready %}disabled{% endif %}>Import Server</button>
+          </div>
         </form>
         {% endfor %}
       {% else %}
-        <div class="empty-message">No unmanaged server directories were detected under {{ server_root or "the configured server root" }}.</div>
+        <div class="empty-message">No unmanaged Minecraft server directories were detected under {{ server_root }}.</div>
       {% endif %}
     </div>
   </section>
 
   <section class="overview-card settings-section">
-    <div class="card-header"><span>Import by path</span></div>
-    <form class="settings-content import-server-form" method="post" action="/servers/import">
-      <label><span>Name</span><input name="name" required></label>
-      <label><span>Server directory</span><input name="directory" placeholder="/srv/minecraft/survival" required></label>
-      <label><span>Server JAR</span><input name="jar_name" value="paper.jar" required></label>
-      <label><span>Port</span><input name="port" type="number" min="1" max="65535" value="25565" required></label>
-      <label><span>Memory</span><select name="memory"><option>2G</option><option>4G</option><option>8G</option><option>16G</option></select></label>
-      <label><span>Process backend</span><select name="process_backend"><option value="systemd" selected>Production (systemd)</option><option value="subprocess">Development (panel-owned)</option></select></label>
-      <p class="muted-small">The directory must be inside the configured server root and contain the selected JAR and server.properties.</p>
-      <button class="button" type="submit">Import server</button>
+    <div class="card-header"><span>Import by Path</span></div>
+    <form id="import-server-form" class="settings-content import-server-form" method="post" action="/servers/import">
+      <label class="property-field full-width"><span>Server directory</span><input id="import-server-directory" name="directory" placeholder="/opt/minecraft" oninput="resetImportInspection()" required></label>
+      <label class="property-field"><span>Panel name</span><input id="import-server-name" name="name" required></label>
+      <label class="property-field"><span>Memory</span><select name="memory"><option>2G</option><option selected>4G</option><option>8G</option><option>16G</option></select></label>
+      <label class="property-field"><span>Process backend</span><select id="import-process-backend" name="process_backend" onchange="resetImportInspection()"><option value="systemd" selected>Production (systemd)</option><option value="subprocess">Development (panel-owned)</option></select></label>
+      <div class="import-server-actions">
+        <button class="button" type="button" onclick="inspectImportServer()">Inspect Path</button>
+        <button id="import-server-submit" class="button start" type="submit" disabled>Import Server</button>
+      </div>
+      <div id="import-inspection-report" class="import-inspection-report muted-small">
+        Inspect the path first. STEMCraft will check the JAR, properties, EULA, port, external services, and effective filesystem permissions.
+      </div>
     </form>
   </section>
 </div>
