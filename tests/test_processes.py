@@ -43,6 +43,30 @@ def test_systemctl_uses_argument_list_without_shell(monkeypatch):
     assert "shell" not in captured["kwargs"]
 
 
+def test_systemd_status_parses_properties_by_name(monkeypatch):
+    config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
+    result = SimpleNamespace(
+        returncode=0,
+        # systemctl does not guarantee the order of selected properties.
+        stdout="MainPID=4321\nActiveState=active\n",
+    )
+    monkeypatch.setattr(processes, "_systemctl", lambda *args, **kwargs: result)
+
+    status = processes._systemd_status(config)
+
+    assert status == {"running": True, "pid": 4321, "backend": "systemd"}
+
+
+def test_systemd_status_treats_zero_pid_as_missing(monkeypatch):
+    config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
+    result = SimpleNamespace(returncode=0, stdout="ActiveState=inactive\nMainPID=0\n")
+    monkeypatch.setattr(processes, "_systemctl", lambda *args, **kwargs: result)
+
+    status = processes._systemd_status(config)
+
+    assert status == {"running": False, "pid": None, "backend": "systemd"}
+
+
 def test_process_stats_reuses_psutil_process_for_cpu_deltas(monkeypatch):
     created = []
 
