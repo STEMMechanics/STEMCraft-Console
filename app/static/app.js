@@ -4104,6 +4104,10 @@ async function updateServerProcessStats() {
       "overview-memory-value",
     );
 
+    const uptimeValue = document.getElementById(
+      "overview-uptime",
+    );
+
     if (!data.running) {
       if (cpuValue) {
         cpuValue.textContent = "0%";
@@ -4111,6 +4115,10 @@ async function updateServerProcessStats() {
 
       if (memoryValue) {
         memoryValue.textContent = "0 MB";
+      }
+
+      if (uptimeValue) {
+        uptimeValue.textContent = "-";
       }
 
       return;
@@ -4127,6 +4135,10 @@ async function updateServerProcessStats() {
         formatConfiguredMemory(configuredMemory)
       }`;
     }
+
+    if (uptimeValue) {
+      uptimeValue.textContent = formatUptime(data.uptime_seconds);
+    }
   } catch (error) {
     console.error(
       "Process stats error:",
@@ -4141,6 +4153,19 @@ setInterval(
 );
 
 updateServerProcessStats();
+
+function formatUptime(value) {
+  const totalSeconds = Math.max(0, Math.floor(Number(value) || 0));
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days) return `${days}d ${hours}h ${minutes}m`;
+  if (hours) return `${hours}h ${minutes}m`;
+  if (minutes) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
 
 function formatMemoryBytes(bytes) {
   const mb = bytes / 1024 / 1024;

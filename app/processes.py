@@ -23,6 +23,7 @@ console_threads: dict[int, threading.Thread] = {}
 # sample and therefore 0%.
 stats_processes: dict[int, psutil.Process] = {}
 stats_process_roots: dict[int, int] = {}
+stats_process_started_at: dict[int, float] = {}
 
 
 @dataclass
@@ -540,11 +541,13 @@ def server_process_stats(
     if not status.get("running") or not pid:
         stats_processes.pop(server_id, None)
         stats_process_roots.pop(server_id, None)
+        stats_process_started_at.pop(server_id, None)
         return {
             "running": False,
             "cpu_percent": 0,
             "memory_used": 0,
             "memory_percent": 0,
+            "uptime_seconds": 0,
         }
 
     try:
@@ -552,6 +555,7 @@ def server_process_stats(
         if proc is None or stats_process_roots.get(server_id) != pid:
             root_proc = psutil.Process(pid)
             proc = root_proc
+            stats_process_started_at[server_id] = root_proc.create_time()
 
             # A systemd service owns the lightweight Python supervisor as its
             # MainPID. Minecraft runs as a child, so measure that workload
@@ -586,6 +590,17 @@ def server_process_stats(
                     proc.memory_percent(),
                     1,
                 ),
+
+            "uptime_seconds": max(
+                0,
+                int(
+                    time.time()
+                    - stats_process_started_at.get(
+                        server_id,
+                        time.time(),
+                    )
+                ),
+            ),
         }
 
     except (
@@ -595,10 +610,12 @@ def server_process_stats(
 
         stats_processes.pop(server_id, None)
         stats_process_roots.pop(server_id, None)
+        stats_process_started_at.pop(server_id, None)
 
         return {
             "running": False,
             "cpu_percent": 0,
             "memory_used": 0,
             "memory_percent": 0,
+            "uptime_seconds": 0,
         }
