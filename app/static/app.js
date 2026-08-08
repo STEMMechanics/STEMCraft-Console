@@ -4421,7 +4421,45 @@ function populatePaperBuilds(builds, installedBuild = null) {
   }).join("");
   const button = document.getElementById("paper-update-button");
   if (button && builds.length) {
-    button.textContent = `Download and install build ${builds[0].id}`;
+    button.textContent = "Download and replace JAR";
+  }
+}
+
+function openDeleteServerModal() {
+  document.getElementById("delete-server-confirmation").value = "";
+  document.getElementById("delete-server-files").checked = false;
+  document.getElementById("delete-server-error").textContent = "";
+  document.getElementById("delete-server-modal").hidden = false;
+  document.getElementById("delete-server-confirmation").focus();
+}
+
+function closeDeleteServerModal() {
+  document.getElementById("delete-server-modal").hidden = true;
+}
+
+async function confirmDeleteServer() {
+  const page = document.querySelector(".properties-page[data-server-id]");
+  const button = document.getElementById("confirm-delete-server");
+  const error = document.getElementById("delete-server-error");
+  button.disabled = true;
+  error.textContent = "Deleting server...";
+
+  try {
+    const response = await fetch(`/api/web/servers/${page.dataset.serverId}/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        confirmation: document.getElementById("delete-server-confirmation").value,
+        delete_files: document.getElementById("delete-server-files").checked,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to delete server");
+    if (data.warning) alert(data.warning);
+    window.location.href = "/servers";
+  } catch (requestError) {
+    error.textContent = requestError.message;
+    button.disabled = false;
   }
 }
 

@@ -885,6 +885,28 @@ button.start:hover {
   color: var(--danger);
 }
 
+.paper-installed-version small {
+  color: var(--muted);
+  font-size: 0.78em;
+  font-weight: 500;
+}
+
+.danger-zone {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.danger-zone-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.danger-zone-content p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
 /* SWITCH */
 
 .switch {
