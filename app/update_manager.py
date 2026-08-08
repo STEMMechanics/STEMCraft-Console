@@ -156,7 +156,7 @@ def get_latest_release():
 
 
 UPDATE_ITEMS = ("app", "migrations", "alembic.ini", "requirements.txt")
-RELEASE_TAG_PATTERN = re.compile(r"^v[0-9]+(?:\.[0-9]+){1,3}(?:[-+][A-Za-z0-9.-]+)?$")
+RELEASE_TAG_PATTERN = re.compile(r"^v?[0-9]+(?:\.[0-9]+){1,3}(?:[-+][A-Za-z0-9.-]+)?$")
 ROLLBACK_ID_PATTERN = re.compile(r"^[0-9]{8}T[0-9]{6}Z$")
 
 

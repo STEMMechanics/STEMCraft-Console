@@ -43,7 +43,6 @@ fi
 # run from a checkout, continue directly with the local source instead.
 if [[ -z "$SOURCE_DIR" || ! -d "$SOURCE_DIR/app" || ! -f "$SOURCE_DIR/requirements.txt" ]]; then
   REPOSITORY=${STEMCRAFT_CONSOLE_REPOSITORY:-stemmechanics/stemcraft-console}
-  REF=${STEMCRAFT_CONSOLE_REF:-main}
 
   for command in curl tar mktemp find; do
     command -v "$command" >/dev/null 2>&1 || {
@@ -52,6 +51,27 @@ if [[ -z "$SOURCE_DIR" || ! -d "$SOURCE_DIR/app" || ! -f "$SOURCE_DIR/requiremen
     }
   done
 
+  if [[ -n "${STEMCRAFT_CONSOLE_REF:-}" ]]; then
+    REF=$STEMCRAFT_CONSOLE_REF
+    REF_TYPE=heads
+    DOWNLOAD_LABEL="development ref"
+  else
+    if ! LATEST_RELEASE_URL=$(curl --fail --silent --show-error --location \
+      --proto '=https' --tlsv1.2 --output /dev/null --write-out '%{url_effective}' \
+      "https://github.com/$REPOSITORY/releases/latest"); then
+      echo "Unable to resolve the latest published STEMCraft Console release." >&2
+      exit 1
+    fi
+    REF=${LATEST_RELEASE_URL##*/}
+    REF_TYPE=tags
+    DOWNLOAD_LABEL="release"
+  fi
+
+  if [[ ! "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ || "$REF" == *".."* || "$REF" == *"//"* ]]; then
+    echo "GitHub returned an invalid release or source reference: $REF" >&2
+    exit 1
+  fi
+
   TEMP_DIR=$(mktemp -d /tmp/stemcraft-console-install.XXXXXX)
   cleanup() {
     rm -rf -- "$TEMP_DIR"
@@ -59,8 +79,8 @@ if [[ -z "$SOURCE_DIR" || ! -d "$SOURCE_DIR/app" || ! -f "$SOURCE_DIR/requiremen
   trap cleanup EXIT
 
   ARCHIVE="$TEMP_DIR/source.tar.gz"
-  SOURCE_URL="https://github.com/$REPOSITORY/archive/refs/heads/$REF.tar.gz"
-  echo "Downloading STEMCraft Console from $REPOSITORY ($REF)..."
+  SOURCE_URL="https://github.com/$REPOSITORY/archive/refs/$REF_TYPE/$REF.tar.gz"
+  echo "Downloading STEMCraft Console $DOWNLOAD_LABEL $REF from $REPOSITORY..."
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
     "$SOURCE_URL" --output "$ARCHIVE"
   tar -xzf "$ARCHIVE" -C "$TEMP_DIR"
