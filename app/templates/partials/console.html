@@ -1,0 +1,61 @@
+<div class="console-page" data-server-id="{{ server.id }}" data-page-title="Console">
+
+  <div class="console-toolbar">
+
+    <div class="console-filters">
+      <button class="console-filter active" data-level="ALL">
+        ALL
+      </button>
+
+      <button class="console-filter" data-level="INFO">
+        INFO
+      </button>
+
+      <button class="console-filter" data-level="WARN">
+        WARN
+      </button>
+
+      <button class="console-filter" data-level="ERROR">
+        ERROR
+      </button>
+
+      <button class="console-filter" data-level="DEBUG">
+        DEBUG
+      </button>
+    </div>
+
+
+    <div class="console-toolbar-actions">
+
+<button id="console-autoscroll" class="console-icon-button active" onclick="toggleConsoleAutoScroll()"
+  title="Auto-scroll enabled">
+  <i class="fa-solid fa-arrow-down"></i>
+</button>
+
+      <button class="button" onclick="updateConsolePage()">
+        Refresh
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <div id="console-output" class="console-output"></div>
+
+
+  <div class="console-command">
+
+    <span class="console-prompt">
+      ›
+    </span>
+
+    <input id="console-input" type="text" placeholder="Type a command and press Enter..." autocomplete="off">
+
+    <button class="button" id="console-send" onclick="sendConsoleCommand()">
+      Send
+    </button>
+
+  </div>
+
+</div>

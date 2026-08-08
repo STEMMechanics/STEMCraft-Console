@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}
+{{ edit_user.username }} | STEMCraft Console
+{% endblock %}
+
+{% block body %}
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div class="brand">
+            STEMCraft Console
+        </div>
+
+        <nav>
+
+            <a href="/dashboard">
+                Dashboard
+            </a>
+
+            <a href="/servers">
+                Servers
+            </a>
+
+            <a
+                href="/users"
+                class="active"
+            >
+                Users
+            </a>
+
+        </nav>
+
+    </aside>
+
+
+    <main>
+
+        <header>
+
+            <a href="/users">
+                ← Users
+            </a>
+
+            <div class="account">
+
+                {{ user.username }}
+
+                <span class="role">
+                    {{ user.role }}
+                </span>
+
+            </div>
+
+        </header>
+
+
+        <section class="content">
+
+            <h1>
+                {{ edit_user.username }}
+            </h1>
+
+
+            <div class="panel">
+
+                <h2>Account</h2>
+
+                <form
+                    method="post"
+                    action="/users/{{ edit_user.id }}/save"
+                >
+
+                    <label>
+                        Username
+                    </label>
+
+                    <input
+                        name="username"
+                        value="{{ edit_user.username }}"
+                        required
+                    >
+
+
+                    <label>
+                        New password
+                    </label>
+
+                    <input
+                        name="password"
+                        type="password"
+                        placeholder="Leave blank to keep current password"
+                    >
+
+
+                    <label>
+                        Role
+                    </label>
+
+                    <select name="role">
+
+                        <option
+                            value="user"
+                            {% if edit_user.role == "user" %}
+                            selected
+                            {% endif %}
+                        >
+                            User
+                        </option>
+
+                        <option
+                            value="admin"
+                            {% if edit_user.role == "admin" %}
+                            selected
+                            {% endif %}
+                        >
+                            Admin
+                        </option>
+
+                    </select>
+
+
+                    <label class="checkbox">
+
+                        <input
+                            type="checkbox"
+                            name="enabled"
+                            {% if edit_user.enabled %}
+                            checked
+                            {% endif %}
+                        >
+
+                        Account enabled
+
+                    </label>
+
+
+                    <button class="button">
+                        Save Account
+                    </button>
+
+                </form>
+
+            </div>
+
+
+            {% if edit_user.role == "user" %}
+
+            <div class="panel">
+
+                <h2>Server Access</h2>
+
+                <p class="muted">
+                    Select the servers this
+                    user can manage.
+                </p>
+
+                <form
+                    method="post"
+                    action="/users/{{ edit_user.id }}/servers"
+                >
+
+                    <div class="server-access-list">
+
+                        {% for server in servers %}
+
+                        <label class="server-access-row">
+
+                            <input
+                                type="checkbox"
+                                name="servers"
+                                value="{{ server.id }}"
+                                {% if server.id in assigned_ids %}
+                                checked
+                                {% endif %}
+                            >
+
+                            <div>
+
+                                <strong>
+                                    {{ server.name }}
+                                </strong>
+
+                                <span>
+                                    {% if server.minecraft_version %}
+                                    Paper {{ server.minecraft_version }}
+                                    {% else %}
+                                    Not installed
+                                    {% endif %}
+                                </span>
+
+                            </div>
+
+                        </label>
+
+                        {% else %}
+
+                        <p>
+                            No servers have been
+                            created yet.
+                        </p>
+
+                        {% endfor %}
+
+                    </div>
+
+                    <button class="button">
+                        Save Server Access
+                    </button>
+
+                </form>
+
+            </div>
+
+            {% endif %}
+
+
+            {% if edit_user.id != user.id %}
+
+            <div class="panel danger-panel">
+
+                <h2>Delete User</h2>
+
+                <form
+                    method="post"
+                    action="/users/{{ edit_user.id }}/delete"
+                >
+
+                    <button class="button danger">
+                        Delete User
+                    </button>
+
+                </form>
+
+            </div>
+
+            {% endif %}
+
+        </section>
+
+    </main>
+
+</div>
+
+{% endblock %}

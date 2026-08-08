@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>
+        {% block title %}STEMCraft Console{% endblock %}
+    </title>
+
+    <link rel="stylesheet" href="/static/style.css?v=20260808-7">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</head>
+
+<body>
+
+    <div class="app-shell">
+
+        {% include "partials/sidebar.html" %}
+
+        <main class="main-area">
+
+            <div id="topbar">
+                {% include "partials/topbar.html" %}
+            </div>
+
+            <div id="page-content" class="page-content">
+
+                {% block content %}
+                {% endblock %}
+
+            </div>
+
+        </main>
+
+    </div>
+
+
+    <script src="/static/app.js?v=20260808-7"></script>
+</body>
+
+</html>

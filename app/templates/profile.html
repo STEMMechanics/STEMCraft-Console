@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}
+Profile | STEMCraft Console
+{% endblock %}
+
+{% block body %}
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div class="brand">
+            STEMCraft Console
+        </div>
+
+        <nav>
+
+            <a href="/dashboard">
+                Dashboard
+            </a>
+
+            <a href="/servers">
+                Servers
+            </a>
+
+            {% if user.role == "admin" %}
+
+            <a href="/users">
+                Users
+            </a>
+
+            {% endif %}
+
+        </nav>
+
+    </aside>
+
+
+    <main>
+
+        <header>
+
+            <div></div>
+
+            <div class="account">
+
+                {{ user.username }}
+
+                <span class="role">
+                    {{ user.role }}
+                </span>
+
+                <a href="/logout">
+                    Logout
+                </a>
+
+            </div>
+
+        </header>
+
+
+        <section class="content">
+
+            <h1>My Account</h1>
+
+            <div class="panel">
+
+                <form
+                    method="post"
+                    action="/profile"
+                >
+
+                    <label>
+                        Username
+                    </label>
+
+                    <input
+                        name="username"
+                        value="{{ user.username }}"
+                        required
+                    >
+
+
+                    <label>
+                        New password
+                    </label>
+
+                    <input
+                        name="password"
+                        type="password"
+                        minlength="8"
+                        placeholder="Leave blank to keep current password"
+                    >
+
+                    <button class="button">
+                        Save Changes
+                    </button>
+
+                </form>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+{% endblock %}

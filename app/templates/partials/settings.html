@@ -1,0 +1,687 @@
+<div class="settings-page" data-page-title="Settings">
+
+    <section class="overview-card settings-section">
+
+        <div class="card-header">
+            Profile
+        </div>
+
+        <div class="settings-content">
+
+            <label class="property-field">
+
+                <span>Username</span>
+
+                <input id="settings-profile-username" type="text" value="{{ user.username }}">
+
+            </label>
+
+
+            <label class="property-field">
+
+                <span>Email</span>
+
+                <input id="settings-profile-email" type="email" value="{{ user.email or '' }}">
+
+            </label>
+
+
+            <label class="property-field">
+
+                <span>New Password</span>
+
+                <input id="settings-profile-password" type="password"
+                    placeholder="Leave blank to keep current password">
+
+            </label>
+
+
+            <div class="settings-save-row">
+
+                <span id="profile-save-status" class="muted-small"></span>
+
+                <button class="button" onclick="saveOwnProfile()">
+                    Save Profile
+                </button>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section class="overview-card settings-section">
+
+        <div class="card-header">
+            Two-Factor Authentication
+        </div>
+
+
+        <div class="tfa-settings">
+
+            <div>
+
+                <strong>
+                    Authenticator App
+                </strong>
+
+                <p>
+                    Protect your account with a
+                    time-based one-time password.
+                </p>
+
+            </div>
+
+
+            <div id="tfa-disabled-controls" hidden>
+
+                <button class="button" onclick="beginTFASetup()">
+                    Enable 2FA
+                </button>
+
+            </div>
+
+
+            <div id="tfa-enabled-controls" class="tfa-enabled-controls" hidden>
+
+                <span class="tfa-enabled-label">
+
+                    <i class="fa-solid fa-circle-check"></i>
+
+                    Enabled
+
+                </span>
+
+
+                <button class="button" onclick="regenerateRecoveryCodes()">
+                    Recovery Codes
+                </button>
+
+
+                <button class="button danger" onclick="openDisableTFAModal()">
+                    Disable
+                </button>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    {% if user.role == "admin" %}
+
+    <section class="overview-card settings-section">
+
+        <div class="card-header">
+
+            <span>
+                Users
+            </span>
+
+            <button class="settings-header-button" onclick="openAddUserModal()">
+                <i class="fa-solid fa-plus"></i>
+
+                Add User
+            </button>
+
+        </div>
+
+
+        <div class="settings-user-list">
+
+            {% for item in users %}
+
+            <div class="settings-user-row">
+
+                <div>
+
+                    <strong>
+                        {{ item.username }}
+                    </strong>
+
+                    <small>
+
+                        {{ item.role | capitalize }}
+
+                        {% if not item.enabled %}
+                        · Disabled
+                        {% endif %}
+
+                        {% if item.must_change_password %}
+                        · Password change required
+                        {% endif %}
+
+                    </small>
+
+                </div>
+
+
+                <button class="button" onclick="openEditUserModal(
+                        {{ item.id }}
+                    )">
+                    Edit
+                </button>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+    </section>
+
+
+    <section class="overview-card settings-section">
+
+        <div class="card-header">
+            Email / SMTP
+        </div>
+
+        <div class="settings-content">
+
+            <label class="property-field">
+
+                <span>SMTP Host</span>
+
+                <input id="smtp-host">
+
+            </label>
+
+
+            <label class="property-field">
+
+                <span>SMTP Port</span>
+
+                <input id="smtp-port" type="number" value="587">
+
+            </label>
+
+
+            <label class="property-field">
+
+                <span>Username</span>
+
+                <input id="smtp-username">
+
+            </label>
+
+
+            <label class="property-field">
+
+                <span>Password</span>
+
+                <input id="smtp-password" type="password" placeholder="Leave blank to keep current password">
+
+            </label>
+
+
+            <label class="property-field">
+
+                <span>Security</span>
+
+                <select id="smtp-security">
+
+                    <option value="starttls">
+                        STARTTLS
+                    </option>
+
+                    <option value="ssl">
+                        SSL/TLS
+                    </option>
+
+                    <option value="none">
+                        None
+                    </option>
+
+                </select>
+
+            </label>
+
+
+            <label class="property-field">
+
+                <span>From Name</span>
+
+                <input id="smtp-from-name" value="STEMCraft Console">
+
+            </label>
+
+
+            <label class="property-field full-width">
+
+                <span>From Address</span>
+
+                <input id="smtp-from-address" type="email">
+
+            </label>
+
+
+            <div class="settings-save-row">
+
+                <span id="smtp-save-status" class="muted-small"></span>
+
+
+                <button type="button" class="button" onclick="sendSMTPTest()">
+                    Send Test
+                </button>
+
+
+                <button class="button" type="button" onclick="saveSMTPSettings()">
+                    Save SMTP
+                </button>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section class="overview-card settings-section">
+
+        <div class="card-header">
+            System
+        </div>
+
+        <div class="settings-content">
+
+
+            <div class="settings-info-row">
+
+                <span>
+                    Listen Address
+                </span>
+
+                <code>
+                    {{ console_host }}:{{ console_port }}
+                </code>
+
+            </div>
+
+
+            <div class="settings-info-row">
+
+                <span>
+                    Server Root
+                </span>
+
+                <code>
+                    {{ server_root }}
+                </code>
+
+            </div>
+
+
+            <div class="settings-info-row">
+
+                <span>
+                    Database
+                </span>
+
+                <code>
+                    {{ database_path }}
+                </code>
+
+            </div>
+
+
+            <div class="settings-info-row">
+
+                <span>
+                    Database Migrations
+                </span>
+
+                <span class="settings-ok">
+                    Alembic enabled
+                </span>
+
+            </div>
+
+            <div class="settings-info-row">
+
+                <span>
+                    Application Version
+                </span>
+
+                <div class="settings-version-info">
+
+                    <code>
+                        v{{ app_version }}
+                    </code>
+
+                    <span id="console-update-status" class="muted-small">
+                        Checking for updates...
+                    </span>
+
+                    <button id="console-update-button" class="button" onclick="upgradeConsole()" hidden>
+                        Upgrade
+                    </button>
+
+                    <button id="console-rollback-button" class="button" onclick="rollbackConsoleUpdate()" hidden>
+                        Roll back
+                    </button>
+
+                </div>
+
+            </div>
+        </div>
+
+    </section>
+
+    {% endif %}
+
+</div>
+
+
+<!-- TFA SETUP -->
+
+<div id="tfa-setup-modal" class="modal-backdrop" hidden>
+
+    <div class="modal-card tfa-modal">
+
+        <h2>
+            Set up two-factor authentication
+        </h2>
+
+        <p>
+            Scan this QR code with your authenticator app.
+        </p>
+
+
+        <div class="tfa-qr-wrap">
+
+            <img id="tfa-qr-code" class="tfa-qr-code" alt="Two-factor QR code">
+
+        </div>
+
+
+        <div class="tfa-secret">
+
+            <span>
+                Manual setup key
+            </span>
+
+            <code id="tfa-secret"></code>
+
+        </div>
+
+
+        <label class="property-field">
+
+            <span>
+                Enter the current 6-digit code
+            </span>
+
+            <input id="tfa-confirm-code" type="text" inputmode="numeric" autocomplete="one-time-code">
+
+        </label>
+
+
+        <div id="tfa-setup-error" class="login-error" hidden></div>
+
+
+        <div class="modal-actions">
+
+            <button class="button" onclick="closeTFASetupModal()">
+                Cancel
+            </button>
+
+            <button class="button" onclick="confirmTFASetup()">
+                Enable 2FA
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- TFA RECOVERY CODES -->
+
+<div id="tfa-recovery-modal" class="modal-backdrop" hidden>
+
+    <div class="modal-card">
+
+        <h2>
+            Recovery codes
+        </h2>
+
+        <p>
+            Store these somewhere safe.
+            Each code can only be used once.
+        </p>
+
+
+        <div id="tfa-recovery-codes" class="tfa-recovery-codes"></div>
+
+
+        <div class="modal-actions">
+
+            <button class="button" onclick="closeRecoveryCodesModal()">
+                Done
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- DISABLE TFA -->
+
+<div id="tfa-disable-modal" class="modal-backdrop" hidden>
+
+    <div class="modal-card">
+
+        <h2>
+            Disable two-factor authentication?
+        </h2>
+
+        <p>
+            Enter your current password to confirm.
+        </p>
+
+
+        <label class="property-field">
+
+            <span>Password</span>
+
+            <input id="tfa-disable-password" type="password">
+
+        </label>
+
+
+        <div id="tfa-disable-error" class="login-error" hidden></div>
+
+
+        <div class="modal-actions">
+
+            <button class="button" onclick="closeDisableTFAModal()">
+                Cancel
+            </button>
+
+            <button class="button danger" onclick="disableTFA()">
+                Disable
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+{% if user.role == "admin" %}
+
+<!-- USER EDITOR -->
+
+<div id="user-modal" class="modal-backdrop" hidden>
+
+    <div class="modal-card settings-user-modal">
+
+        <h2 id="user-modal-title">
+            Add User
+        </h2>
+
+
+        <input id="settings-user-id" type="hidden">
+
+
+        <label class="property-field">
+
+            <span>Username</span>
+
+            <input id="settings-user-username" type="text">
+
+        </label>
+
+
+        <label class="property-field">
+
+            <span>Password</span>
+
+            <input id="settings-user-password" type="password">
+
+            <small id="settings-password-help">
+                Minimum 8 characters
+            </small>
+
+        </label>
+
+
+        <label class="property-field">
+
+            <span>Role</span>
+
+            <select id="settings-user-role" onchange="updateUserServerAccessVisibility()">
+
+                <option value="user">
+                    User
+                </option>
+
+                <option value="admin">
+                    Admin
+                </option>
+
+            </select>
+
+        </label>
+
+
+        <label id="settings-user-enabled-row" class="property-toggle">
+
+            <div>
+
+                <strong>
+                    Enabled
+                </strong>
+
+                <small>
+                    Allow this account to sign in.
+                </small>
+
+            </div>
+
+
+            <span class="switch">
+
+                <input id="settings-user-enabled" type="checkbox" checked>
+
+                <span class="switch-slider"></span>
+
+            </span>
+
+        </label>
+
+
+        <label class="property-toggle">
+
+            <div>
+
+                <strong>
+                    Require password change
+                </strong>
+
+                <small>
+                    Force this user to choose a new password
+                    the next time they sign in.
+                </small>
+
+            </div>
+
+
+            <span class="switch">
+
+                <input id="settings-user-must-change-password" type="checkbox" checked>
+
+                <span class="switch-slider"></span>
+
+            </span>
+
+        </label>
+
+
+        <div id="settings-server-access" class="settings-server-access">
+
+            <span class="settings-section-label">
+                Server Access
+            </span>
+
+
+            {% for server in servers %}
+
+            <label class="settings-server-row">
+
+                <input type="checkbox" value="{{ server.id }}" class="settings-server-checkbox">
+
+                <span>
+                    {{ server.name }}
+                </span>
+
+            </label>
+
+
+            {% else %}
+
+            <div class="muted-small">
+                No servers available.
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+
+        <div id="settings-user-error" class="login-error" hidden></div>
+
+
+        <div class="modal-actions">
+
+            <button id="delete-user-button" class="button danger" onclick="deleteSettingsUser()" hidden>
+                Delete
+            </button>
+
+
+            <div class="settings-modal-spacer"></div>
+
+
+            <button class="button" onclick="closeUserModal()">
+                Cancel
+            </button>
+
+
+            <button class="button" onclick="saveSettingsUser()">
+                Save
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endif %}

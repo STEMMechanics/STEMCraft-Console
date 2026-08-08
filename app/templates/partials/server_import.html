@@ -1,0 +1,36 @@
+<div class="server-import-page" data-page-title="Import Server">
+  <section class="overview-card settings-section">
+    <div class="card-header"><span>Detected servers</span></div>
+    <div class="settings-content">
+      {% if detected_servers %}
+        {% for detected in detected_servers %}
+        <form class="import-server-row" method="post" action="/servers/import">
+          <input name="name" value="{{ detected.name }}" required>
+          <input name="directory" value="{{ detected.directory }}" readonly required>
+          <input name="jar_name" value="{{ detected.jar_name }}" required>
+          <input name="port" type="number" min="1" max="65535" value="{{ detected.port }}" required>
+          <select name="memory"><option>2G</option><option>4G</option><option>8G</option></select>
+          <select name="process_backend"><option value="subprocess">Development</option><option value="systemd">systemd</option></select>
+          <button class="button" type="submit">Import</button>
+        </form>
+        {% endfor %}
+      {% else %}
+        <div class="empty-message">No unmanaged server directories were detected under {{ server_root or "the configured server root" }}.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="overview-card settings-section">
+    <div class="card-header"><span>Import by path</span></div>
+    <form class="settings-content import-server-form" method="post" action="/servers/import">
+      <label><span>Name</span><input name="name" required></label>
+      <label><span>Server directory</span><input name="directory" placeholder="/srv/minecraft/survival" required></label>
+      <label><span>Server JAR</span><input name="jar_name" value="paper.jar" required></label>
+      <label><span>Port</span><input name="port" type="number" min="1" max="65535" value="25565" required></label>
+      <label><span>Memory</span><select name="memory"><option>2G</option><option>4G</option><option>8G</option><option>16G</option></select></label>
+      <label><span>Process backend</span><select name="process_backend"><option value="subprocess">Development</option><option value="systemd">systemd</option></select></label>
+      <p class="muted-small">The directory must be inside the configured server root and contain the selected JAR and server.properties.</p>
+      <button class="button" type="submit">Import server</button>
+    </form>
+  </section>
+</div>

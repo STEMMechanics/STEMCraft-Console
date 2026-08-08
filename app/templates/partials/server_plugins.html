@@ -1,0 +1,155 @@
+<div
+    class="plugins-page"
+    data-server-id="{{ server.id }}"
+    data-page-title="Plugins"
+>
+
+    <div
+        id="plugin-restart-alert"
+        class="plugin-restart-alert"
+        hidden
+    >
+        <div>
+            <i class="fa-solid fa-rotate"></i>
+
+            <span>
+                Plugin changes are pending.
+                Restart the server to apply them.
+            </span>
+        </div>
+
+        <span class="restart-required">
+            Restart required
+        </span>
+    </div>
+
+
+    <div class="plugins-toolbar">
+
+        <input
+            id="plugin-search"
+            type="search"
+            placeholder="Search installed plugins..."
+        >
+
+    </div>
+
+    {% if user.role == "admin" %}
+    <section class="overview-card plugin-install-card">
+      <div class="card-header"><span>Install Plugin</span></div>
+      <div class="plugin-install-options">
+        <form class="plugin-install-form" onsubmit="uploadPluginJar(event)">
+          <div class="plugin-install-heading"><strong>Upload a JAR</strong><small>Select a Paper or Bukkit plugin from this device.</small></div>
+          <label class="plugin-file-picker">
+            <input name="plugin" type="file" accept=".jar,application/java-archive" onchange="updatePluginFileName(this)" required>
+            <span class="button"><i class="fa-solid fa-folder-open"></i> Choose JAR</span>
+            <span class="plugin-file-name">No file selected</span>
+          </label>
+          <button class="button start" type="submit">Upload and install</button>
+        </form>
+        <form class="plugin-install-form" onsubmit="downloadPluginUrl(event)">
+          <div class="plugin-install-heading"><strong>Download from URL</strong><small>Use a direct, public HTTPS link ending in .jar.</small></div>
+          <input name="url" type="url" placeholder="https://example.org/plugin.jar" required>
+          <button class="button start" type="submit">Download and install</button>
+        </form>
+      </div>
+      <p id="plugin-install-status" class="muted-small"></p>
+    </section>
+    {% endif %}
+
+
+    <section class="overview-card">
+
+        <div class="card-header">
+
+            <span>
+                Installed Plugins
+            </span>
+
+            <span
+                id="plugin-count"
+                class="plugin-count"
+            >
+                0 plugins
+            </span>
+
+        </div>
+
+
+        <div
+            id="plugin-list"
+            class="plugin-list-page"
+        >
+            Loading plugins...
+        </div>
+
+    </section>
+
+</div>
+
+
+<div
+    id="plugin-remove-modal"
+    class="modal-backdrop"
+    hidden
+>
+
+    <div class="modal-card">
+
+        <h2>
+            Remove plugin?
+        </h2>
+
+        <p>
+            <strong
+                id="remove-plugin-name"
+            ></strong>
+            will be removed from this server.
+        </p>
+
+
+        <label
+            id="remove-config-option"
+            class="modal-checkbox"
+        >
+
+            <input
+                id="remove-plugin-config"
+                type="checkbox"
+            >
+
+            <span>
+                Also remove plugin configuration
+                and data
+            </span>
+
+        </label>
+
+
+        <p
+            id="remove-config-description"
+            class="modal-note"
+        ></p>
+
+
+        <div class="modal-actions">
+
+            <button
+                class="button"
+                onclick="closePluginRemoveModal()"
+            >
+                Cancel
+            </button>
+
+            <button
+                class="button danger"
+                onclick="confirmPluginRemove()"
+            >
+                Remove
+            </button>
+
+        </div>
+
+    </div>
+
+</div>

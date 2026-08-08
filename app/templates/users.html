@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}
+Users | STEMCraft Console
+{% endblock %}
+
+{% block body %}
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <div class="brand">
+            STEMCraft Console
+        </div>
+
+        <nav>
+
+            <a href="/dashboard">
+                Dashboard
+            </a>
+
+            <a href="/servers">
+                Servers
+            </a>
+
+            <a
+                href="/users"
+                class="active"
+            >
+                Users
+            </a>
+
+        </nav>
+
+    </aside>
+
+
+    <main>
+
+        <header>
+
+            <div></div>
+
+            <div class="account">
+
+                <a href="/profile">
+                    {{ user.username }}
+                </a>
+
+                <span class="role">
+                    {{ user.role }}
+                </span>
+
+                <a href="/logout">
+                    Logout
+                </a>
+
+            </div>
+
+        </header>
+
+
+        <section class="content">
+
+            <div class="page-heading">
+
+                <div>
+
+                    <h1>Users</h1>
+
+                    <p>
+                        Manage users and
+                        server access
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="panel">
+
+                <h2>Create user</h2>
+
+                <form
+                    method="post"
+                    action="/users/create"
+                    class="user-form"
+                >
+
+                    <input
+                        name="username"
+                        placeholder="Username"
+                        required
+                    >
+
+                    <input
+                        name="password"
+                        type="password"
+                        placeholder="Password"
+                        minlength="8"
+                        required
+                    >
+
+                    <select name="role">
+
+                        <option value="user">
+                            User
+                        </option>
+
+                        <option value="admin">
+                            Admin
+                        </option>
+
+                    </select>
+
+                    <button class="button">
+                        Create User
+                    </button>
+
+                </form>
+
+            </div>
+
+
+            <div class="panel">
+
+                <h2>Accounts</h2>
+
+                <div class="user-list">
+
+                    {% for account in users %}
+
+                    <a
+                        class="user-row"
+                        href="/users/{{ account.id }}"
+                    >
+
+                        <div>
+
+                            <strong>
+                                {{ account.username }}
+                            </strong>
+
+                            <div class="muted-small">
+
+                                {{ account.servers|length }}
+                                server{% if account.servers|length != 1 %}s{% endif %}
+
+                            </div>
+
+                        </div>
+
+                        <div class="user-row-right">
+
+                            <span class="role">
+                                {{ account.role }}
+                            </span>
+
+                            {% if account.enabled %}
+
+                            <span class="enabled">
+                                Enabled
+                            </span>
+
+                            {% else %}
+
+                            <span class="disabled">
+                                Disabled
+                            </span>
+
+                            {% endif %}
+
+                        </div>
+
+                    </a>
+
+                    {% endfor %}
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+{% endblock %}

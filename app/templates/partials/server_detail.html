@@ -1,0 +1,59 @@
+<div class="server-overview" data-server-id="{{ server.id }}" data-page-title="Overview">
+  <div class="server-summary-grid">
+    <div class="overview-card summary-card">
+      <span class="card-label">Players</span>
+      <div class="summary-value"><span id="overview-players">0</span><small> / <span id="overview-max-players">0</span></small></div>
+    </div>
+    <div class="overview-card summary-card">
+      <span class="card-label">Uptime</span>
+      <div id="overview-uptime" class="summary-value">-</div>
+    </div>
+    <div class="overview-card summary-card">
+      <span class="card-label">Plugins</span>
+      <div class="summary-value accent"><span id="overview-plugin-active">-</span><small> / <span id="overview-plugin-total">-</span></small></div>
+    </div>
+    <div class="overview-card summary-card">
+      <span class="card-label"><i class="fa-solid fa-network-wired"></i> Java Port</span>
+      <div class="summary-value">{{ server.port }}</div>
+    </div>
+    <div class="overview-card summary-card">
+      <span class="card-label"><i class="fa-solid fa-gamepad"></i> Bedrock Port</span>
+      <div>
+        <div id="overview-bedrock-port" class="summary-value">-</div>
+        <small id="overview-bedrock-status" class="summary-footnote">Checking Geyser...</small>
+      </div>
+    </div>
+    <div class="overview-card summary-card version-summary-card">
+      <span class="card-label">Server Version</span>
+      <div class="summary-value">
+        {{ server.minecraft_version or "Unknown" }}{% if server.paper_build %} <small>(build {{ server.paper_build }})</small>{% endif %}
+      </div>
+      <small id="paper-version-detail" class="summary-footnote">Checking Paper releases...</small>
+    </div>
+  </div>
+
+  <div class="overview-stack">
+    <section class="overview-card automation-card">
+      <div class="card-header">
+        <span>History &amp; Performance</span>
+        <select id="metrics-range" onchange="loadServerMetrics()" aria-label="Metrics time range">
+          <option value="6">Last 6 hours</option><option value="24" selected>Last 24 hours</option>
+          <option value="168">Last 7 days</option><option value="720">Last 30 days</option>
+        </select>
+      </div>
+      <div class="metrics-grid">
+        <div><strong>CPU</strong><small id="overview-cpu-value" class="metric-current-value">-</small><canvas id="metric-cpu" height="120"></canvas></div>
+        <div><strong>Memory</strong><small id="overview-memory-value" class="metric-current-value" data-memory="{{ server.memory }}">0 MB</small><canvas id="metric-memory" height="120"></canvas></div>
+        <div><strong>Players</strong><canvas id="metric-players" height="120"></canvas></div>
+        <div><strong>Uptime</strong><canvas id="metric-uptime" height="120"></canvas></div>
+      </div>
+    </section>
+
+    <section class="overview-card recent-logs overview-console-card">
+      <div class="card-header"><span>Recent Logs</span>
+        <a href="/servers/{{ server.id }}/console" hx-get="/servers/{{ server.id }}/console" hx-target="#page-content" hx-push-url="true">Console <i class="fa-solid fa-arrow-right"></i></a>
+      </div>
+      <pre id="overview-logs">Loading logs...</pre>
+    </section>
+  </div>
+</div>

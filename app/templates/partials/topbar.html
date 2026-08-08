@@ -1,0 +1,43 @@
+<div class="topbar" data-server-id="{{ active_server.id if active_server else '' }}">
+
+    <h1 id="topbar-title">
+        {{ page_title or "Overview" }}
+    </h1>
+
+    {% if active_server %}
+
+    <div class="topbar-actions">
+
+        <div class="topbar-status">
+
+            <span id="topbar-status-dot" class="server-dot"></span>
+
+            <span id="topbar-status-text">
+                Checking...
+            </span>
+
+            <span class="topbar-version">
+                · Paper
+                {{ active_server.minecraft_version or "" }}
+            </span>
+
+        </div>
+
+        <button id="topbar-start" class="button start" onclick="serverAction('start')" style="display:none">
+            Start
+        </button>
+
+        <button id="topbar-restart" class="button" onclick="serverAction('restart')">
+            Restart
+        </button>
+
+        <button id="topbar-stop" class="button danger" onclick="serverAction('stop')">
+            Stop
+        </button>
+
+
+    </div>
+
+    {% endif %}
+
+</div>

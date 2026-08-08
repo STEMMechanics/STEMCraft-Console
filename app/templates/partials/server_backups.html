@@ -1,0 +1,256 @@
+<div
+    class="backups-page"
+    data-server-id="{{ server.id }}"
+    data-page-title="Backups"
+>
+
+    <div class="backups-toolbar">
+
+        <div>
+            <h2>
+                Server Backups
+            </h2>
+
+            <p>
+                Create, download and restore
+                snapshots of this server.
+            </p>
+        </div>
+
+
+        <button class="button"
+            onclick="openCreateBackupModal()"
+        >
+            <i class="fa-solid fa-plus"></i>
+            Create Backup
+        </button>
+
+    </div>
+
+
+    <div
+        id="backup-running-warning"
+        class="plugin-restart-alert"
+        hidden
+    >
+        <div>
+            <i class="fa-solid fa-circle-info"></i>
+
+            <span>
+                The server is running.
+                Backups can still be created,
+                but restoring requires the
+                server to be stopped.
+            </span>
+        </div>
+    </div>
+
+    <div id="backup-jobs" class="backup-jobs"></div>
+
+
+    <section class="overview-card">
+
+        <div class="card-header">
+
+            <span>
+                Backups
+            </span>
+
+            <span
+                id="backup-count"
+                class="plugin-count"
+            >
+                0 backups
+            </span>
+
+        </div>
+
+
+        <div
+            id="backup-list"
+            class="backup-list"
+        >
+            Loading backups...
+        </div>
+
+    </section>
+
+    <section class="overview-card automation-card backup-automation-card">
+      <div class="card-header"><span>Backup &amp; Command Automation</span></div>
+      {% if user.role == "admin" %}
+      <form id="schedule-form" class="schedule-form" onsubmit="createServerSchedule(event)">
+        <input name="name" maxlength="100" placeholder="Schedule name" required>
+        <select name="task_type" onchange="toggleScheduleFields(this.value)"><option value="backup">Backup</option><option value="command">Console command</option></select>
+        <input name="interval_minutes" type="number" min="1" value="1440" aria-label="Interval in minutes" required>
+        <input name="retention_count" type="number" min="1" value="7" aria-label="Backups to retain">
+        <input name="command" maxlength="500" placeholder="Console command" hidden>
+        <button class="button" type="submit">Add schedule</button>
+      </form>
+      {% endif %}
+      <div id="schedule-list" class="schedule-list">Loading schedules...</div>
+      <div id="schedule-runs" class="schedule-runs"></div>
+    </section>
+
+</div>
+
+
+<div id="create-backup-modal" class="modal-backdrop" hidden>
+
+    <div class="modal-card">
+
+        <div id="backup-create-form">
+
+            <h2>
+                Create backup
+            </h2>
+
+            <p>
+                An optional label helps identify
+                this backup later.
+            </p>
+
+            <input id="backup-label" type="text" placeholder="Before plugin update">
+
+            <div class="modal-actions">
+
+                <button class="button" onclick="closeCreateBackupModal()">
+                    Cancel
+                </button>
+
+                <button class="button" id="create-backup-button" onclick="createBackup()">
+                    Create Backup
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <div id="backup-create-progress" hidden>
+
+            <h2>
+                Creating backup
+            </h2>
+
+            <p id="backup-create-message">
+                Queued
+            </p>
+
+            <div class="upload-progress-track">
+                <div id="backup-create-progress-bar" class="upload-progress-bar" style="width: 0%"></div>
+            </div>
+
+            <div id="backup-create-progress-percent" class="backup-progress-percent">
+                0%
+            </div>
+
+            <p class="modal-note">
+                You can close this window.
+                The backup will continue in the background.
+            </p>
+
+            <div class="modal-actions">
+
+                <button class="button" onclick="closeCreateBackupModal()">
+                    Hide
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div
+    id="restore-backup-modal"
+    class="modal-backdrop"
+    hidden
+>
+
+    <div class="modal-card">
+
+        <h2>
+            Restore backup?
+        </h2>
+
+        <p>
+            The current server files will be
+            replaced with:
+        </p>
+
+        <p>
+            <strong
+                id="restore-backup-name"
+            ></strong>
+        </p>
+
+        <p class="modal-note">
+            The backups directory itself is
+            preserved.
+        </p>
+
+        <div class="modal-actions">
+
+            <button
+                class="button"
+                onclick="closeRestoreBackupModal()"
+            >
+                Cancel
+            </button>
+
+            <button
+                class="button danger"
+                onclick="confirmRestoreBackup()"
+            >
+                Restore
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<div
+    id="delete-backup-modal"
+    class="modal-backdrop"
+    hidden
+>
+
+    <div class="modal-card">
+
+        <h2>
+            Delete backup?
+        </h2>
+
+        <p>
+            Permanently delete
+            <strong
+                id="delete-backup-name"
+            ></strong>?
+        </p>
+
+        <div class="modal-actions">
+
+            <button
+                class="button"
+                onclick="closeDeleteBackupModal()"
+            >
+                Cancel
+            </button>
+
+            <button
+                class="button danger"
+                onclick="confirmDeleteBackup()"
+            >
+                Delete
+            </button>
+
+        </div>
+
+    </div>
+
+</div>

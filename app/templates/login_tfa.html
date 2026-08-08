@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>
+        Two-Factor Authentication | STEMCraft Console
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="/static/style.css"
+    >
+</head>
+
+<body class="login-body">
+
+    <div class="login-shell">
+
+        <div class="login-logo-wrap">
+
+            <img
+                src="/static/images/logo.svg"
+                class="login-logo"
+                alt="STEMMechanics"
+            >
+
+        </div>
+
+
+        <div class="login-card">
+
+            <h1>
+                Authentication code
+            </h1>
+
+            <p>
+                Enter the 6-digit code from your authenticator app,
+                or one of your recovery codes.
+            </p>
+
+
+            {% if error %}
+
+            <div class="login-error">
+                {{ error }}
+            </div>
+
+            {% endif %}
+
+
+            <form
+                method="post"
+                action="/login/tfa"
+            >
+
+                <label class="login-field">
+
+                    <span>
+                        Authentication code
+                    </span>
+
+                    <input
+                        class="tfa-login-code"
+                        type="text"
+                        name="code"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                        autofocus
+                        required
+                    >
+
+                </label>
+
+
+                <button
+                    class="login-button"
+                    type="submit"
+                >
+                    Continue
+                </button>
+
+            </form>
+
+        </div>
+
+
+        <div class="login-version">
+            STEMCraft Console v{{ app_version }}
+        </div>
+
+    </div>
+
+</body>
+
+</html>

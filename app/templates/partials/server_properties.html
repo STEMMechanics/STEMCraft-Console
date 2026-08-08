@@ -1,0 +1,482 @@
+<div
+    class="properties-page"
+    data-server-id="{{ server.id }}"
+    data-page-title="Properties"
+>
+    {% if user.role == "admin" %}
+    <section class="overview-card property-section paper-management" data-server-id="{{ server.id }}">
+        <div class="card-header"><span>Paper Server Version</span><span id="paper-version-detail" class="plugin-count">Checking releases...</span></div>
+        <div class="paper-management-body">
+            <div>
+                <strong>Installed: Paper {{ server.minecraft_version or "Unknown" }}{% if server.paper_build %} build {{ server.paper_build }}{% endif %}</strong>
+                <p>Download the latest stable build, replace the configured server JAR, or change Minecraft versions. The server must be stopped.</p>
+            </div>
+            <label class="property-field"><span>Minecraft version</span><select id="paper-version-select" onchange="loadPaperBuilds(this.value)"><option>Loading versions...</option></select></label>
+            <label class="property-field"><span>Paper build</span><select id="paper-build-select"><option>Loading builds...</option></select></label>
+            <button id="paper-update-button" class="button start" onclick="installPaperVersion()" type="button" disabled>Download and replace JAR</button>
+        </div>
+        <p id="paper-update-message" class="paper-update-message muted-small"></p>
+    </section>
+    {% endif %}
+
+    <div
+        id="properties-restart-alert"
+        class="plugin-restart-alert"
+        hidden
+    >
+        <div>
+            <i class="fa-solid fa-rotate"></i>
+
+            <span>
+                Property changes are pending.
+                Restart the server to apply them.
+            </span>
+        </div>
+
+        <span class="restart-required">
+            Restart required
+        </span>
+    </div>
+
+
+    <form
+        id="properties-form"
+        onsubmit="saveServerProperties(event)"
+    >
+
+        <section class="overview-card property-section">
+
+            <div class="card-header">
+                Server
+            </div>
+
+            <div class="property-grid">
+
+                <label class="property-field full-width">
+
+                    <span>MOTD</span>
+
+                    <input
+                        id="property-motd"
+                        name="motd"
+                        type="text"
+                    >
+
+                </label>
+
+
+                <label class="property-field">
+
+                    <span>Server Port</span>
+
+                    <input
+                        id="property-server-port"
+                        name="server_port"
+                        type="number"
+                        min="1"
+                        max="65535"
+                    >
+
+                </label>
+
+
+                <label class="property-field">
+
+                    <span>Max Players</span>
+
+                    <input
+                        id="property-max-players"
+                        name="max_players"
+                        type="number"
+                        min="1"
+                    >
+
+                </label>
+
+
+                <label class="property-field">
+
+                    <span>Difficulty</span>
+
+                    <select
+                        id="property-difficulty"
+                        name="difficulty"
+                    >
+                        <option value="peaceful">
+                            Peaceful
+                        </option>
+
+                        <option value="easy">
+                            Easy
+                        </option>
+
+                        <option value="normal">
+                            Normal
+                        </option>
+
+                        <option value="hard">
+                            Hard
+                        </option>
+                    </select>
+
+                </label>
+
+
+                <label class="property-field">
+
+                    <span>Game Mode</span>
+
+                    <select
+                        id="property-gamemode"
+                        name="gamemode"
+                    >
+                        <option value="survival">
+                            Survival
+                        </option>
+
+                        <option value="creative">
+                            Creative
+                        </option>
+
+                        <option value="adventure">
+                            Adventure
+                        </option>
+
+                        <option value="spectator">
+                            Spectator
+                        </option>
+                    </select>
+
+                </label>
+
+
+                <label class="property-toggle">
+
+                    <div>
+                        <strong>Online Mode</strong>
+
+                        <small>
+                            Verify players with Mojang.
+                        </small>
+                    </div>
+
+                    <span class="switch">
+
+                        <input
+                            id="property-online-mode"
+                            type="checkbox"
+                        >
+
+                        <span class="switch-slider"></span>
+
+                    </span>
+
+                </label>
+
+            </div>
+
+        </section>
+
+
+        <section class="overview-card property-section">
+
+            <div class="card-header">
+                World
+            </div>
+
+            <div class="property-grid">
+
+                <label class="property-field">
+
+                    <span>Level Name</span>
+
+                    <input
+                        id="property-level-name"
+                        type="text"
+                    >
+
+                </label>
+
+
+                <label class="property-field">
+
+                    <span>Seed</span>
+
+                    <input
+                        id="property-level-seed"
+                        type="text"
+                        placeholder="Random"
+                    >
+
+                </label>
+
+
+                <label class="property-field">
+
+                    <span>View Distance</span>
+
+                    <input
+                        id="property-view-distance"
+                        type="number"
+                        min="2"
+                        max="32"
+                    >
+
+                </label>
+
+
+                <label class="property-field">
+
+                    <span>Simulation Distance</span>
+
+                    <input
+                        id="property-simulation-distance"
+                        type="number"
+                        min="2"
+                        max="32"
+                    >
+
+                </label>
+
+
+                <label class="property-field">
+
+                    <span>Spawn Protection</span>
+
+                    <input
+                        id="property-spawn-protection"
+                        type="number"
+                        min="0"
+                    >
+
+                </label>
+
+
+                <label class="property-toggle">
+
+                    <div>
+                        <strong>Allow Nether</strong>
+
+                        <small>
+                            Enable Nether dimension.
+                        </small>
+                    </div>
+
+                    <span class="switch">
+
+                        <input
+                            id="property-allow-nether"
+                            type="checkbox"
+                        >
+
+                        <span class="switch-slider"></span>
+
+                    </span>
+
+                </label>
+
+            </div>
+
+        </section>
+
+
+        <section class="overview-card property-section">
+
+            <div class="card-header">
+                Gameplay
+            </div>
+
+            <div class="property-toggle-list">
+
+                <label class="property-toggle">
+
+                    <div>
+                        <strong>PvP</strong>
+                        <small>Allow player combat.</small>
+                    </div>
+
+                    <span class="switch">
+
+                        <input
+                            id="property-pvp"
+                            type="checkbox"
+                        >
+
+                        <span class="switch-slider"></span>
+
+                    </span>
+
+                </label>
+
+
+                <label class="property-toggle">
+
+                    <div>
+                        <strong>Hardcore</strong>
+                        <small>Enable hardcore mode.</small>
+                    </div>
+
+                    <span class="switch">
+
+                        <input
+                            id="property-hardcore"
+                            type="checkbox"
+                        >
+
+                        <span class="switch-slider"></span>
+
+                    </span>
+
+                </label>
+
+
+                <label class="property-toggle">
+
+                    <div>
+                        <strong>Command Blocks</strong>
+                        <small>Allow command blocks.</small>
+                    </div>
+
+                    <span class="switch">
+
+                        <input
+                            id="property-command-block"
+                            type="checkbox"
+                        >
+
+                        <span class="switch-slider"></span>
+
+                    </span>
+
+                </label>
+
+
+                <label class="property-toggle">
+
+                    <div>
+                        <strong>Allow Flight</strong>
+                        <small>Prevent flight kick checks.</small>
+                    </div>
+
+                    <span class="switch">
+
+                        <input
+                            id="property-allow-flight"
+                            type="checkbox"
+                        >
+
+                        <span class="switch-slider"></span>
+
+                    </span>
+
+                </label>
+
+
+                <label class="property-toggle">
+
+                    <div>
+                        <strong>Whitelist</strong>
+                        <small>Only whitelisted players can join.</small>
+                    </div>
+
+                    <span class="switch">
+
+                        <input
+                            id="property-whitelist"
+                            type="checkbox"
+                        >
+
+                        <span class="switch-slider"></span>
+
+                    </span>
+
+                </label>
+
+            </div>
+
+        </section>
+
+
+        <section class="overview-card property-section">
+
+            <div class="card-header">
+                Network
+            </div>
+
+            <div class="property-grid">
+
+                <label class="property-toggle">
+
+                    <div>
+                        <strong>Query</strong>
+                        <small>Enable GameSpy query.</small>
+                    </div>
+
+                    <span class="switch">
+
+                        <input
+                            id="property-enable-query"
+                            type="checkbox"
+                        >
+
+                        <span class="switch-slider"></span>
+
+                    </span>
+
+                </label>
+
+
+                <label class="property-toggle">
+
+                    <div>
+                        <strong>RCON</strong>
+                        <small>Enable remote console.</small>
+                    </div>
+
+                    <span class="switch">
+
+                        <input
+                            id="property-enable-rcon"
+                            type="checkbox"
+                        >
+
+                        <span class="switch-slider"></span>
+
+                    </span>
+
+                </label>
+
+
+                <label class="property-field full-width">
+
+                    <span>Resource Pack URL</span>
+
+                    <input
+                        id="property-resource-pack"
+                        type="url"
+                        placeholder="https://..."
+                    >
+
+                </label>
+
+            </div>
+
+        </section>
+
+
+        <div class="properties-actions">
+
+            <span
+                id="properties-save-status"
+                class="muted-small"
+            ></span>
+
+            <button class="button" type="submit">
+                Save Changes
+            </button>
+
+        </div>
+
+    </form>
+
+</div>

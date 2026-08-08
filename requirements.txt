@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+python-jose[cryptography]
+pwdlib[argon2]
+python-multipart
+jinja2
+itsdangerous
+psutil
+alembic
+pyotp
+qrcode[pil]
+pytest
+pytest-cov
+httpx
+python-dotenv

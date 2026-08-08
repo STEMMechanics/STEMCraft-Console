@@ -1,0 +1,357 @@
+<div align="center">
+
+# STEMCraft Console
+
+**Web-based management console for STEMCraft Minecraft servers.**
+
+[STEMCraft](https://www.stemmechanics.com.au/stemcraft) | [STEMMechanics](https://www.stemmechanics.com.au/)
+
+</div>
+
+---
+
+<!-- Replace with an actual screenshot once added to the repository.
+
+<div align="center">
+  <img alt="STEMCraft Console Overview" src="docs/images/overview.png" />
+</div>
+
+---
+
+-->
+
+STEMCraft Console is the server management interface developed for **STEMCraft**, a Minecraft community operated by **STEMMechanics**.
+
+It provides a straightforward web interface for managing STEMCraft's Minecraft servers without requiring administrators to work directly from the command line.
+
+STEMCraft Console is designed primarily around **Minecraft Java Edition running PaperMC**. It may work with other Paper-compatible servers, but PaperMC is the platform we develop and test against.
+
+---
+
+## Quick Start
+
+For a production Linux host, use the installer below. For local development,
+use the development installation steps.
+
+### Production installation
+
+The installer creates a locked-down `stemcraft` service account, an application
+virtual environment, systemd services, a persistent secret, and data directories.
+It supports the following systemd-based distributions:
+
+| Distribution | Supported versions | Package manager |
+| --- | --- | --- |
+| Ubuntu | 22.04 and newer | `apt` |
+| Oracle Linux | 8 and newer | `dnf` |
+
+For a one-line installation from the official GitHub repository:
+
+```bash
+curl -fsSL https://dev.stemcraft.com.au/install.sh | sudo bash
+```
+
+This redirects to the installer in the official GitHub repository, downloads
+the current `main` branch into a temporary directory, and runs the same
+installer described below. Review the [installer script](scripts/install.sh)
+before piping it to a shell. For a reviewable or version-controlled
+installation, clone a trusted release checkout and run:
+
+```bash
+sudo ./scripts/install.sh
+```
+
+The installer installs Python, Java 21, polkit and supporting system packages.
+Use `--skip-packages` only when those dependencies have already been installed.
+It does not configure a firewall or reverse proxy.
+
+On a fresh installation it prints a generated password for the initial `admin`
+account. Sign in through HTTPS, change that password immediately, then remove
+the `STEMCRAFT_CONSOLE_ADMIN_PASSWORD` line from
+`/etc/stemcraft-console/console.env`. The value is only used to create an
+administrator when the database does not already contain one.
+
+The panel binds to `127.0.0.1:8000`. Configure an HTTPS reverse proxy before
+exposing it. Persistent files are stored in these locations:
+
+| Path | Purpose |
+| --- | --- |
+| `/opt/stemcraft-console` | Application and Python virtual environment |
+| `/etc/stemcraft-console/console.env` | Service configuration and session secret |
+| `/var/lib/stemcraft-console` | Database and upgrade snapshots |
+| `/srv/minecraft` | Managed Minecraft instances and backups |
+
+Useful service commands are available through the installed helper:
+
+```bash
+sudo stemcraft-console status
+sudo stemcraft-console restart
+stemcraft-console logs
+sudo stemcraft-console server survival restart
+stemcraft-console server survival logs
+```
+
+The final example uses the server's systemd service name, which is configured
+when the server is created or imported in the panel.
+
+To upgrade from a newer trusted release checkout:
+
+```bash
+sudo ./scripts/upgrade.sh
+```
+
+Each upgrade saves the previous application and database under
+`/var/lib/stemcraft-console/upgrades/TIMESTAMP`. To roll back, pass that exact
+directory to:
+
+```bash
+sudo ./scripts/rollback.sh /var/lib/stemcraft-console/upgrades/TIMESTAMP
+```
+
+To uninstall the application while preserving the database, configuration,
+upgrade snapshots, backups, and Minecraft servers:
+
+```bash
+sudo ./scripts/uninstall.sh --confirm
+```
+
+Remove `/var/lib/stemcraft-console`, `/etc/stemcraft-console`, or
+`/srv/minecraft` separately only when their retained data is no longer needed.
+
+### Development installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/stemmechanics/stemcraft-console.git
+cd stemcraft-console
+```
+
+Create and activate a Python virtual environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Apply the database migrations:
+
+```bash
+alembic upgrade head
+```
+
+Start STEMCraft Console:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000
+```
+
+Set a persistent, randomly generated secret before first use (at least 32
+characters). Without one, the development server generates a temporary secret
+and sessions are invalidated on restart:
+
+```bash
+export STEMCRAFT_CONSOLE_SECRET="replace-with-a-long-random-value"
+```
+
+For HTTPS deployments, also set
+`STEMCRAFT_CONSOLE_COOKIE_SECURE=true`. File uploads default to a 512 MiB limit;
+override it with `STEMCRAFT_CONSOLE_MAX_UPLOAD_BYTES` when required.
+
+---
+
+## Requirements
+
+|             | Requirement                                                        |
+| ----------- | ------------------------------------------------------------------ |
+| Minecraft   | Java Edition                                                       |
+| Server      | PaperMC                                                            |
+| OS          | Ubuntu 22.04+ or Oracle Linux 8+ for production                     |
+| Python      | Python 3.10 or newer                                                |
+| Database    | SQLite                                                             |
+| Java        | Java 21 by default; the managed Minecraft version must support it   |
+| Development | macOS is supported for local development                           |
+
+> PaperMC is the primary server platform targeted by STEMCraft Console. Other Paper-compatible or Bukkit-derived implementations may work but are not currently tested or officially supported.
+
+---
+
+## Server Management
+
+STEMCraft Console manages multiple Minecraft servers from a single interface.
+
+Each server has its own:
+
+```text
+Server directory
+Minecraft version
+PaperMC build
+Java memory allocation
+Network port
+Plugins
+Configuration
+Files
+Backups
+User access
+```
+
+The console is intended to provide the common administration tools required to operate STEMCraft without requiring routine shell access to the server.
+
+### Server Processes
+
+During development, Minecraft servers may be launched directly by STEMCraft Console.
+
+Production deployments are intended to use independent **systemd services** for Minecraft instances.
+
+This allows Minecraft servers to continue running when STEMCraft Console is stopped, restarted or upgraded.
+Choose the systemd process backend while creating a server. The installer grants
+the panel service permission to manage only `stemcraft-server@*.service` units;
+server names, JAR filenames, memory values, and JVM arguments are validated and
+passed without a shell.
+
+The installed units are:
+
+- `stemcraft-console.service` for the web panel and scheduled work.
+- `stemcraft-server@.service` for independently managed Minecraft instances.
+
+Use `journalctl -u stemcraft-console.service` for panel logs or
+`journalctl -u stemcraft-server@NAME.service` for a Minecraft instance. The
+`stemcraft-console` command shown above provides shorter equivalents.
+
+---
+
+## Database & Upgrades
+
+STEMCraft Console uses **SQLite** for application data and **Alembic** for database schema migrations.
+
+After updating the application, apply outstanding migrations with:
+
+```bash
+alembic upgrade head
+```
+
+The application also applies pending migrations automatically during startup.
+Running the command manually remains useful for deployments that migrate before
+restarting the service.
+
+Developers making model changes can generate a migration with:
+
+```bash
+alembic revision --autogenerate -m "Description of change"
+```
+
+Review the generated migration before applying it:
+
+```bash
+alembic upgrade head
+```
+
+Database migrations are designed to allow existing installations to upgrade without deleting or recreating their database.
+
+---
+
+## Authentication & Security
+
+STEMCraft Console requires authenticated user accounts and supports:
+
+- Administrator and standard user roles
+- Per-server access permissions
+- Password hashing
+- Forced password changes
+- TOTP two-factor authentication
+- Recovery codes
+- Email-based password recovery
+- SMTP configuration
+
+The management interface provides access to Minecraft console commands, server files and configuration. It should therefore be treated as an administrative interface.
+
+Production installations should use HTTPS and should not expose the console to untrusted networks without appropriate security controls.
+
+### Reporting a Vulnerability
+
+Please **do not create a public GitHub issue** for security vulnerabilities.
+
+Instead:
+
+- [Report a vulnerability privately through GitHub](https://github.com/stemmechanics/stemcraft-console/security/advisories/new)
+- [Email STEMMechanics](mailto:hello@stemmechanics.com.au)
+
+See our [Security Policy](SECURITY.md) for further information.
+
+---
+
+## Project Status
+
+STEMCraft Console is under active development.
+
+It is developed primarily to support **STEMCraft**, so development priorities are driven by the requirements of the STEMCraft community and STEMMechanics workshops rather than the goal of creating a universal Minecraft hosting platform.
+
+The project is open source, and others running PaperMC servers are welcome to use, adapt and contribute to it.
+
+Expect interfaces, configuration and installation procedures to change while the project approaches its first stable release.
+
+---
+
+## Contributing
+
+Bug reports, improvements and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and contribution guidelines.
+
+For larger changes, please open an issue first.
+
+Run the test suite with:
+
+```bash
+pytest
+```
+
+|     |                                                                                                                  |
+| --- | ---------------------------------------------------------------------------------------------------------------- |
+| 🐛   | [Report a Bug](https://github.com/stemmechanics/stemcraft-console/issues/new?template=bug_report.yml)            |
+| ✨   | [Request a Feature](https://github.com/stemmechanics/stemcraft-console/issues/new?template=feature_request.yml)  |
+| 💡   | [Suggest an Improvement](https://github.com/stemmechanics/stemcraft-console/issues/new?template=improvement.yml) |
+| 🔧   | [Propose a Refactor](https://github.com/stemmechanics/stemcraft-console/issues/new?template=refactor.yml)        |
+
+[View all issue options](https://github.com/stemmechanics/stemcraft-console/issues/new/choose)
+
+---
+
+## Acknowledgements
+
+The interface and user experience of STEMCraft Console were inspired in part by [Fabricator](https://github.com/philderks/Fabricator), an open-source Minecraft server management panel created by Phil Derks.
+
+STEMCraft Console is an independent implementation and does not contain Fabricator source code or assets.
+
+STEMCraft Console is built primarily for [PaperMC](https://papermc.io/).
+
+Minecraft is a trademark of Microsoft Corporation. STEMCraft Console and STEMMechanics are not affiliated with or endorsed by Mojang Studios or Microsoft.
+
+---
+
+## About STEMMechanics
+
+STEMCraft Console is a project of [STEMMechanics](https://www.stemmechanics.com.au/).
+
+STEMMechanics develops and delivers hands-on STEM, coding, engineering and creative technology experiences for young people and communities.
+
+[STEMCraft](https://www.stemmechanics.com.au/stemcraft) extends that work into Minecraft, providing a managed online environment for collaborative building, challenges, workshops and community activities.
+
+---
+
+## License
+
+[GPL-3.0-or-later](LICENSE)
+
+STEMCraft Console is free and open-source software licensed under the GNU General Public License version 3 or any later version.
+
+Copyright © 2026 STEMMechanics

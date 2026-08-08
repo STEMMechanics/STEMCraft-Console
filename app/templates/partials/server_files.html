@@ -1,0 +1,250 @@
+<div class="files-page" data-server-id="{{ server.id }}" data-current-path="{{ current_path }}" data-page-title="Files">
+
+    <div class="files-toolbar">
+
+        <div class="file-path">
+
+            <i class="fa-regular fa-folder"></i>
+
+            <span>/</span>
+
+            {% if current_path %}
+            <span>{{ current_path }}</span>
+            {% endif %}
+
+        </div>
+
+
+        <div class="files-toolbar-actions">
+
+            <button class="button" onclick="openNewFolderModal()">
+                <i class="fa-solid fa-folder-plus"></i>
+                New Folder
+            </button>
+
+
+            <label class="file-upload-button" for="file-upload">
+                <i class="fa-solid fa-upload"></i>
+                Upload
+
+                <input id="file-upload" type="file" multiple onchange="uploadFiles(this.files)">
+            </label>
+
+        </div>
+
+    </div>
+
+
+    <section id="file-browser" class="overview-card file-browser" ondragover="handleFileBrowserDragOver(event)"
+        ondragleave="handleFileBrowserDragLeave(event)" ondrop="handleFileBrowserDrop(event)">
+
+        <div class="file-browser-header">
+
+            <span>Name</span>
+            <span>Size</span>
+            <span></span>
+
+        </div>
+
+
+        {% if parent_path is not none %}
+
+        <a class="file-row" href="/servers/{{ server.id }}/files?path={{ parent_path }}"
+            hx-get="/servers/{{ server.id }}/files?path={{ parent_path }}" hx-target="#page-content" hx-push-url="true">
+
+            <div class="file-name">
+
+                <i class="fa-solid fa-arrow-turn-up"></i>
+
+                <span>..</span>
+
+            </div>
+
+            <div></div>
+            <div></div>
+
+        </a>
+
+        {% endif %}
+
+
+        {% for entry in entries %}
+        <div class="file-row {% if entry.is_dir %}file-folder-row{% endif %}" draggable="true" data-path="{{ entry.path }}"
+            data-name="{{ entry.name }}" data-is-dir="{{ 'true' if entry.is_dir else 'false' }}" {% if entry.is_dir %}
+            data-folder-path="{{ entry.path }}" ondragover="handleFolderRowDragOver(event)"
+            ondragleave="handleFolderRowDragLeave(event)" ondrop="handleFolderRowDrop(event)" {% endif %}
+            ondragstart="handleInternalDragStart(event)">
+
+            <div class="file-name">
+
+                {% if entry.is_dir %}
+
+                <i class="fa-solid fa-folder file-folder" data-folder-icon></i>
+
+                <a class="file-folder-target" href="/servers/{{ server.id }}/files?path={{ entry.path }}"
+                    hx-get="/servers/{{ server.id }}/files?path={{ entry.path }}" hx-target="#page-content"
+                    hx-push-url="true" data-folder-path="{{ entry.path }}" ondragover="handleFolderDragOver(event)"
+                    ondragleave="handleFolderDragLeave(event)" ondrop="handleFolderDrop(event)">
+                    {{ entry.name }}
+                </a>
+
+                {% else %}
+
+                <i class="fa-regular fa-file file-document"></i>
+
+                {% if entry.editable %}
+
+                <a href="/servers/{{ server.id }}/files/edit?path={{ entry.path }}"
+                    hx-get="/servers/{{ server.id }}/files/edit?path={{ entry.path }}" hx-target="#page-content"
+                    hx-push-url="true">
+                    {{ entry.name }}
+                </a>
+
+                {% else %}
+
+                <span>
+                    {{ entry.name }}
+                </span>
+
+                {% endif %}
+
+                {% endif %}
+
+            </div>
+
+
+            <div class="file-size">
+
+                {{ entry.size_display }}
+
+            </div>
+
+
+            <div class="file-actions">
+
+                {% if not entry.is_dir %}
+
+                <a class="file-action-button" href="/servers/{{ server.id }}/files/download?path={{ entry.path }}"
+                    title="Download">
+                    <i class="fa-solid fa-download"></i>
+                </a>
+
+                {% endif %}
+
+
+                <button class="file-action-button" onclick="openRenameModal(
+                        '{{ entry.path | e }}',
+                        '{{ entry.name | e }}'
+                    )" title="Rename">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+
+
+                <button class="file-action-button danger-icon" onclick="openDeleteFileModal(
+                        '{{ entry.path | e }}',
+                        '{{ entry.name | e }}'
+                    )" title="Delete">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+
+            </div>
+
+        </div>
+
+        {% else %}
+
+        <div class="empty-message file-empty">
+
+            This folder is empty.
+
+        </div>
+
+        {% endfor %}
+
+    </section>
+
+</div>
+
+
+<div id="new-folder-modal" class="modal-backdrop" hidden>
+
+    <div class="modal-card">
+
+        <h2>
+            New folder
+        </h2>
+
+        <input id="new-folder-name" type="text" placeholder="Folder name">
+
+        <div class="modal-actions">
+
+            <button class="button" onclick="closeNewFolderModal()">
+                Cancel
+            </button>
+
+            <button class="button" onclick="createNewFolder()">
+                Create
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<div id="rename-file-modal" class="modal-backdrop" hidden>
+
+    <div class="modal-card">
+
+        <h2>
+            Rename
+        </h2>
+
+        <input id="rename-file-name" type="text">
+
+        <div class="modal-actions">
+
+            <button class="button" onclick="closeRenameModal()">
+                Cancel
+            </button>
+
+            <button class="button" onclick="confirmRenameFile()">
+                Rename
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<div id="delete-file-modal" class="modal-backdrop" hidden>
+
+    <div class="modal-card">
+
+        <h2>
+            Delete?
+        </h2>
+
+        <p>
+            Permanently delete
+            <strong id="delete-file-name"></strong>?
+        </p>
+
+        <div class="modal-actions">
+
+            <button class="button" onclick="closeDeleteFileModal()">
+                Cancel
+            </button>
+
+            <button class="button danger" onclick="confirmDeleteFile()">
+                Delete
+            </button>
+
+        </div>
+
+    </div>
+
+</div>

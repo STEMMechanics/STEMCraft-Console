@@ -1,0 +1,30 @@
+[Unit]
+Description=STEMCraft Minecraft Server %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stemcraft
+Group=stemcraft
+WorkingDirectory=/opt/stemcraft-console
+EnvironmentFile=-/etc/stemcraft-console/console.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/stemcraft-console/.venv/bin/python -m app.server_supervisor --service-name %i
+Restart=on-failure
+RestartSec=10
+UMask=0027
+LimitNOFILE=65536
+RuntimeDirectory=stemcraft-console
+RuntimeDirectoryMode=0770
+RuntimeDirectoryPreserve=yes
+TimeoutStopSec=90
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/stemcraft-console /srv/minecraft /run/stemcraft-console
+
+[Install]
+WantedBy=multi-user.target
