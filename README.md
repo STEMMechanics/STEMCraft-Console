@@ -134,18 +134,18 @@ sudo ./scripts/rollback.sh /var/lib/stemcraft-console/upgrades/TIMESTAMP
 ### Publishing a release
 
 Set `APP_VERSION` in `app/version.py`, merge the release-preparation PR, then
-tag that exact commit. For version 0.1.2:
+tag that exact commit. For version 0.1.3:
 
 ```bash
 git switch main
 git pull --ff-only
-git tag 0.1.2
-git push origin 0.1.2
+git tag 0.1.3
+git push origin 0.1.3
 ```
 
 The release workflow verifies that the tag matches `APP_VERSION`, creates the
 GitHub release, and attaches a versioned application archive with its SHA-256
-checksum. Both `0.1.2` and `v0.1.2` tag styles are supported, but the existing
+checksum. Both `0.1.3` and `v0.1.3` tag styles are supported, but the existing
 unprefixed style is preferred for consistency. The one-line installer resolves
 GitHub's latest published release and will begin installing it once the release
 has been published.
