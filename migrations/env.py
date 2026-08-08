@@ -40,7 +40,9 @@ config.set_main_option(
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Migrations also run inside Uvicorn during application startup. Preserve
+    # its loggers so startup exceptions remain visible in systemd's journal.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
