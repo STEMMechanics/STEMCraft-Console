@@ -128,8 +128,16 @@ upgrade snapshots, backups, and Minecraft servers:
 sudo ./scripts/uninstall.sh --confirm
 ```
 
-Remove `/var/lib/stemcraft-console`, `/etc/stemcraft-console`, or
-`/srv/minecraft` separately only when their retained data is no longer needed.
+For a completely clean uninstall, including the database, configuration,
+backups, upgrade snapshots, service account, and every Minecraft server:
+
+```bash
+sudo ./scripts/uninstall.sh --purge-all --confirm
+```
+
+> **Warning:** `--purge-all` permanently deletes every managed Minecraft world
+> and server file under `/srv/minecraft`. It cannot be undone unless you have a
+> separate backup.
 
 ### Development installation
 
