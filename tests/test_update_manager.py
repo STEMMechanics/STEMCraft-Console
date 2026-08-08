@@ -11,6 +11,11 @@ def test_normalize_version_handles_release_prefix():
     assert normalize_version("v1.2.3") == (1, 2, 3)
 
 
+@pytest.mark.parametrize("tag", ["0.1.1", "v0.1.1"])
+def test_release_tags_support_existing_and_prefixed_conventions(tag):
+    assert update_manager.RELEASE_TAG_PATTERN.fullmatch(tag)
+
+
 def test_normalize_version_rejects_non_numeric_release():
     assert normalize_version("not-a-version") == (0,)
 
