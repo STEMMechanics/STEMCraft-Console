@@ -70,6 +70,15 @@ the `STEMCRAFT_CONSOLE_ADMIN_PASSWORD` line from
 `/etc/stemcraft-console/console.env`. The value is only used to create an
 administrator when the database does not already contain one.
 
+The initial configuration permits its session cookie over HTTP because the
+panel starts on localhost before a reverse proxy is configured. Once HTTPS is
+working, set the following in `/etc/stemcraft-console/console.env` and restart
+the service:
+
+```text
+STEMCRAFT_CONSOLE_COOKIE_SECURE=true
+```
+
 The installer is safe to run again if the first service start fails. It keeps
 the database, configuration, Minecraft servers, and generated login details
 while repairing the application and systemd files:

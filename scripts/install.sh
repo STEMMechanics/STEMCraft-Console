@@ -204,7 +204,9 @@ if [[ ! -f "$CONFIG_DIR/console.env" ]]; then
     echo "STEMCRAFT_CONSOLE_SERVER_ROOT=$SERVER_DIR"
     echo "STEMCRAFT_CONSOLE_HOST=127.0.0.1"
     echo "STEMCRAFT_CONSOLE_PORT=8000"
-    echo "STEMCRAFT_CONSOLE_COOKIE_SECURE=true"
+    # The panel initially binds to localhost over HTTP. Enable secure cookies
+    # after an HTTPS reverse proxy has been configured.
+    echo "STEMCRAFT_CONSOLE_COOKIE_SECURE=false"
     echo "STEMCRAFT_CONSOLE_ADMIN_USER=admin"
     echo "STEMCRAFT_CONSOLE_ADMIN_PASSWORD=$INITIAL_ADMIN_PASSWORD"
   } > "$CONFIG_DIR/console.env"
@@ -269,6 +271,8 @@ Next steps:
   1. Configure an HTTPS reverse proxy to 127.0.0.1:8000.
   2. Open that HTTPS address and sign in with the details below.
   3. Change the generated administrator password immediately.
+  4. Set STEMCRAFT_CONSOLE_COOKIE_SECURE=true in
+     /etc/stemcraft-console/console.env and restart the service.
 
 Service commands:
   sudo stemcraft-console status
