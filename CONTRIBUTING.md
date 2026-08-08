@@ -143,6 +143,12 @@ Apply database migrations:
 alembic upgrade head
 ```
 
+Create a local administrator if the development database does not have one:
+
+```bash
+python -m app.admin_cli ensure-admin --username admin
+```
+
 Start the development server:
 
 ```bash

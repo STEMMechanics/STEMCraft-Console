@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)
+if [[ -n "$SCRIPT_DIR" && -f "$SCRIPT_DIR/common.sh" ]]; then
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/common.sh"
+else
+  banner() { printf '\n============================================================\n %s\n============================================================\n\n' "$1"; }
+  section() { printf '\n==> %s\n' "$*"; }
+  info() { printf '[INFO]  %s\n' "$*"; }
+  warn() { printf '[WARN]  %s\n' "$*" >&2; }
+  error() { printf '[ERROR] %s\n' "$*" >&2; }
+fi
+
+banner "STEMCraft Console Uninstaller"
+
 usage() {
   cat <<EOF
 Usage:
@@ -34,9 +48,20 @@ if [[ ${EUID} -ne 0 ]]; then
   exit 1
 fi
 
+if [[ "$CONFIRMED" != true && -r /dev/tty ]]; then
+  if [[ "$PURGE_ALL" == true ]]; then
+    warn "This will permanently delete the database, configuration, backups, and every Minecraft server."
+    printf 'Type PURGE to continue: ' >/dev/tty
+    read -r answer </dev/tty || true
+    [[ "$answer" == "PURGE" ]] && CONFIRMED=true
+  else
+    printf 'Remove the application while preserving all data? [y/N] ' >/dev/tty
+    read -r answer </dev/tty || true
+    [[ "$answer" =~ ^[Yy]$ ]] && CONFIRMED=true
+  fi
+fi
 if [[ "$CONFIRMED" != true ]]; then
-  echo "Uninstall confirmation is required." >&2
-  usage >&2
+  error "Uninstall cancelled; confirmation was not provided."
   exit 1
 fi
 
@@ -63,11 +88,11 @@ remove_tree() {
   fi
 }
 
-echo "Stopping and disabling STEMCraft Console..."
+section "Stopping and disabling services"
 systemctl disable --now stemcraft-console.service 2>/dev/null || true
 
 if [[ "$PURGE_ALL" == true ]]; then
-  echo "Stopping all managed Minecraft services..."
+  info "Stopping all managed Minecraft services"
   systemctl disable --now 'stemcraft-server@*.service' 2>/dev/null || true
 fi
 
@@ -76,11 +101,12 @@ rm -f /etc/polkit-1/rules.d/50-stemcraft-console.rules
 rm -f /usr/local/sbin/stemcraft-console
 systemctl daemon-reload
 
-echo "Removing application files from $INSTALL_DIR..."
+section "Removing application files"
+info "Removing $INSTALL_DIR"
 remove_tree "$INSTALL_DIR"
 
 if [[ "$PURGE_ALL" == true ]]; then
-  echo "Permanently removing all STEMCraft Console and Minecraft data..."
+  section "Permanently removing data"
   remove_tree "$DATA_DIR"
   remove_tree "$SERVER_DIR"
   remove_tree "$CONFIG_DIR"
@@ -93,8 +119,8 @@ if [[ "$PURGE_ALL" == true ]]; then
     groupdel "$SERVICE_GROUP" 2>/dev/null || true
   fi
 
+  banner "STEMCraft Console was completely removed"
   cat <<EOF
-STEMCraft Console was completely removed.
 
 Deleted permanently:
   $INSTALL_DIR
@@ -107,8 +133,9 @@ EOF
   exit 0
 fi
 
+banner "STEMCraft Console was removed"
 cat <<EOF
-STEMCraft Console application files were removed successfully.
+Application files were removed successfully.
 
 Preserved data:
   $DATA_DIR

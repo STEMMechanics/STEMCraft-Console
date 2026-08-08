@@ -50,6 +50,7 @@ from .processes import (
     SERVICE_PATTERN,
 )
 from .server_import import detect_server_directories, inspect_server_directory
+from .server_deletion import delete_managed_server
 
 from .web_context import (
     build_web_context,
@@ -94,6 +95,42 @@ SERVER_ROOT.mkdir(
     parents=True,
     exist_ok=True,
 )
+
+
+@router.post("/api/web/servers/{server_id}/delete")
+async def web_delete_server(
+    server_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = current_web_user(request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if user.role != "admin":
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+
+    server = db.get(Server, server_id)
+    if not server:
+        return JSONResponse({"error": "Server not found"}, status_code=404)
+
+    data = await request.json()
+    if data.get("confirmation") != server.name:
+        return JSONResponse(
+            {"error": "Enter the server name exactly to confirm deletion"},
+            status_code=400,
+        )
+
+    try:
+        return delete_managed_server(
+            db,
+            server,
+            delete_files=data.get("delete_files") is True,
+            server_root=SERVER_ROOT,
+        )
+    except ValueError as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    except Exception as error:
+        return JSONResponse({"error": f"Unable to delete server: {error}"}, status_code=500)
 
 # -------------------------------------------------------------------
 # Server access helper

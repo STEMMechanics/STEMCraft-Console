@@ -55,6 +55,16 @@ def register_server(server) -> None:
     )
 
 
+def unregister_server(server_id: int) -> None:
+    server_configs.pop(server_id, None)
+    processes.pop(server_id, None)
+    console_buffers.pop(server_id, None)
+    console_threads.pop(server_id, None)
+    stats_processes.pop(server_id, None)
+    stats_process_roots.pop(server_id, None)
+    stats_process_started_at.pop(server_id, None)
+
+
 def _systemd_config(server_id: int) -> ServerProcessConfig | None:
     config = server_configs.get(server_id)
     return config if config and config.backend == "systemd" else None
