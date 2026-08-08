@@ -2725,24 +2725,111 @@ input[type="checkbox"] {
   background: #21b45b;
 }
 
-.import-server-row {
-  display: grid;
-  grid-template-columns: 1fr 2fr 1fr 100px 100px 130px auto;
-  gap: 8px;
-  padding: 12px 0;
-  border-top: 1px solid var(--border);
-}
-
 .import-server-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
-.import-server-form label {
+.import-detected-list {
+  display: grid;
+  gap: 14px;
+}
+
+.import-server-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.import-server-heading,
+.import-server-fields,
+.import-server-actions {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: end;
+  gap: 12px;
+}
+
+.import-server-heading {
+  align-items: start;
+  justify-content: space-between;
+}
+
+.import-server-heading > div {
+  display: grid;
+  gap: 5px;
+}
+
+.import-server-heading code {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.status-pill {
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.status-pill.active {
+  background: #dcf8e7;
+  color: #168548;
+}
+
+.status-pill.disabled {
+  background: #fde8e8;
+  color: #c53d3d;
+}
+
+.import-server-fields .property-field {
+  flex: 1;
+}
+
+.import-server-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-server-facts span {
+  padding: 5px 9px;
+  background: var(--background);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-check {
+  margin: 0;
+  font-size: 13px;
+}
+
+.import-check.error {
+  color: var(--danger);
+}
+
+.import-check.warning {
+  color: #b7791f;
+}
+
+.import-check.success {
+  color: var(--success);
+}
+
+.import-server-actions,
+.import-inspection-report {
+  grid-column: 1 / -1;
+}
+
+.import-inspection-report {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
 @media (max-width: 1100px) {
@@ -2766,9 +2853,14 @@ input[type="checkbox"] {
 @media (max-width: 700px) {
   .metrics-grid,
   .schedule-form,
-  .import-server-row,
   .import-server-form {
     grid-template-columns: 1fr;
+  }
+
+  .import-server-fields,
+  .import-server-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .plugin-install-form {

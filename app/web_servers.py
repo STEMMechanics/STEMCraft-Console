@@ -49,6 +49,7 @@ from .processes import (
     MEMORY_PATTERN,
     SERVICE_PATTERN,
 )
+from .server_import import detect_server_directories, inspect_server_directory
 from .server_deletion import delete_managed_server
 
 from .web_context import (
@@ -744,7 +745,7 @@ def create_server_web(
 # -------------------------------------------------------------------
 
 @router.get(
-    "/servers/{server_id}",
+    "/servers/{server_id:int}",
     response_class=HTMLResponse,
 )
 def server_detail(
@@ -1260,7 +1261,7 @@ def web_console_data(
 # -------------------------------------------------------------------
 
 @router.get(
-    "/servers/{server_id}/console",
+    "/servers/{server_id:int}/console",
     response_class=HTMLResponse,
 )
 def console_page(
@@ -1310,87 +1311,6 @@ def console_page(
 
 
 # -------------------------------------------------------------------
-# Discover existing Paper servers
-# -------------------------------------------------------------------
-
-def detect_paper_servers():
-    results = []
-
-    if not SERVER_ROOT.exists():
-        return results
-
-
-    for directory in SERVER_ROOT.iterdir():
-
-        if not directory.is_dir():
-            continue
-
-
-        jars = sorted(directory.glob("*.jar"))
-        paper_jar = directory / "paper.jar"
-        jar = paper_jar if paper_jar.is_file() else (jars[0] if jars else None)
-
-        properties = (
-            directory
-            / "server.properties"
-        )
-
-
-        if not jar or not properties.exists():
-            continue
-
-
-        port = 25565
-
-
-        if properties.exists():
-
-            try:
-
-                for line in (
-                    properties
-                    .read_text(
-                        encoding="utf-8",
-                        errors="ignore",
-                    )
-                    .splitlines()
-                ):
-
-                    if line.startswith(
-                        "server-port="
-                    ):
-
-                        port = int(
-                            line.split(
-                                "=",
-                                1,
-                            )[1]
-                        )
-
-
-            except Exception:
-                pass
-
-
-        results.append({
-            "name":
-                directory.name,
-
-            "directory":
-                str(
-                    directory.resolve()
-                ),
-
-            "port":
-                port,
-            "jar_name": jar.name,
-        })
-
-
-    return results
-
-
-# -------------------------------------------------------------------
 # Import existing server
 # -------------------------------------------------------------------
 
@@ -1418,11 +1338,6 @@ def import_servers_page(
         )
 
 
-    detected = (
-        detect_paper_servers()
-    )
-
-
     existing_dirs = {
         str(
             Path(
@@ -1433,13 +1348,7 @@ def import_servers_page(
         in db.query(Server).all()
     }
 
-
-    detected = [
-        server
-        for server in detected
-        if server["directory"]
-        not in existing_dirs
-    ]
+    detected = detect_server_directories(SERVER_ROOT, existing_dirs)
 
 
     context = build_web_context(
@@ -1466,6 +1375,20 @@ def import_servers_page(
     )
 
 
+@router.post("/api/web/servers/import/inspect")
+async def inspect_import_path(request: Request, db: Session = Depends(get_db)):
+    user = current_web_user(request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if user.role != "admin":
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+    data = await request.json()
+    return inspect_server_directory(
+        str(data.get("directory", "")),
+        process_backend=str(data.get("process_backend", "systemd")),
+    )
+
+
 @router.post(
     "/servers/import"
 )
@@ -1474,8 +1397,6 @@ def import_server(
 
     directory: str = Form(),
     name: str = Form(),
-    port: int = Form(default=25565),
-    jar_name: str = Form(default="paper.jar"),
     memory: str = Form(default="2G"),
     process_backend: str = Form(default="systemd"),
 
@@ -1497,47 +1418,21 @@ def import_server(
         )
 
 
-    directory_path = Path(
-        directory
-    ).resolve()
-
-    root = SERVER_ROOT.resolve()
-
-
-    try:
-
-        directory_path.relative_to(
-            root
-        )
-
-
-    except ValueError:
-
-        raise HTTPException(
-            status_code=403,
-            detail="Invalid server directory",
-        )
-
-
-    if Path(jar_name).name != jar_name or not jar_name.lower().endswith(".jar"):
-        raise HTTPException(status_code=400, detail="Invalid JAR filename")
-
-    if not (directory_path / jar_name).is_file():
-
-        raise HTTPException(
-            status_code=400,
-            detail=f"{jar_name} not found",
-        )
-
-    if not (directory_path / "server.properties").is_file():
-        raise HTTPException(status_code=400, detail="server.properties not found")
-
     if process_backend not in {"subprocess", "systemd"}:
         raise HTTPException(status_code=400, detail="Invalid process backend")
     if not MEMORY_PATTERN.fullmatch(memory):
         raise HTTPException(status_code=400, detail="Invalid memory allocation")
-    if not 1 <= port <= 65535:
-        raise HTTPException(status_code=400, detail="Invalid server port")
+
+    inspection = inspect_server_directory(
+        directory,
+        process_backend=process_backend,
+        verify_write=True,
+    )
+    if not inspection["ready"]:
+        raise HTTPException(status_code=400, detail="; ".join(inspection["errors"]))
+    directory_path = Path(inspection["directory"])
+    jar_name = inspection["jar_name"]
+    port = inspection["port"]
 
 
     existing = (

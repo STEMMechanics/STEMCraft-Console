@@ -26,6 +26,52 @@ function normalizeButtonClasses() {
 
 normalizeButtonClasses();
 
+function resetImportInspection() {
+  const submit = document.getElementById("import-server-submit");
+  if (submit) submit.disabled = true;
+}
+
+async function inspectImportServer() {
+  const directory = document.getElementById("import-server-directory");
+  const backend = document.getElementById("import-process-backend");
+  const report = document.getElementById("import-inspection-report");
+  const submit = document.getElementById("import-server-submit");
+  report.textContent = "Inspecting server directory...";
+  submit.disabled = true;
+
+  try {
+    const response = await fetch("/api/web/servers/import/inspect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        directory: directory.value,
+        process_backend: backend.value,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to inspect path");
+
+    if (data.name && !document.getElementById("import-server-name").value) {
+      document.getElementById("import-server-name").value = data.name;
+    }
+    const facts = data.jar_name
+      ? `<div class="import-server-facts"><span>JAR <strong>${escapeHtml(data.jar_name)}</strong></span><span>Port <strong>${Number(data.port)}</strong></span><span>Owner <strong>${escapeHtml(data.owner)}</strong></span><span>Checked as <strong>${escapeHtml(data.checked_as)}</strong></span><span>Service <strong>${escapeHtml(data.service?.unit || "None detected")}</strong></span></div>`
+      : "";
+    const errors = (data.errors || []).map((message) =>
+      `<p class="import-check error"><i class="fa-solid fa-circle-xmark"></i> ${escapeHtml(message)}</p>`
+    ).join("");
+    const warnings = (data.warnings || []).map((message) =>
+      `<p class="import-check warning"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(message)}</p>`
+    ).join("");
+    report.innerHTML = facts + errors + warnings + (data.ready
+      ? '<p class="import-check success"><i class="fa-solid fa-circle-check"></i> Ready to import</p>'
+      : "");
+    submit.disabled = !data.ready;
+  } catch (error) {
+    report.textContent = error.message;
+  }
+}
+
 function toggleServerMenu() {
   document
     .getElementById("server-menu")

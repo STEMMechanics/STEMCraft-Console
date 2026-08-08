@@ -17,6 +17,8 @@ restarts. The API and frontend expose the same controls for both backends.
 - [x] Add scheduled console commands with audit history.
 - [x] Persist and graph historical CPU, memory, player, and uptime metrics.
 - [x] Add a verified, rollback-capable console self-update workflow.
+- [x] Discover and import existing Minecraft servers with service, port, JAR,
+  EULA, and effective-permission checks.
 
 ## Engineering notes
 

@@ -126,6 +126,27 @@ stemcraft-console server survival logs
 The final example uses the server's systemd service name, which is configured
 when the server is created or imported in the panel.
 
+### Importing existing servers
+
+Administrators can use **Import Server** to discover unmanaged Minecraft
+directories under the configured server root or inspect an absolute path such
+as `/opt/minecraft`. Before enabling import, the panel checks:
+
+- `server.properties`, the selected server JAR, port, and EULA state;
+- effective directory and file access for the account running the panel;
+- an actual temporary write when the import is submitted;
+- existing systemd units associated with the directory; and
+- whether the configured Minecraft port is already occupied.
+
+An active or enabled external service must be stopped and disabled before
+STEMCraft Console adopts the directory. This avoids two services writing the
+same world or attempting to bind the same port. Production imports cannot use
+home directories because the installed services retain `ProtectHome=true`.
+
+Importing a path outside `/srv/minecraft` requires rerunning the installer from
+the release that added external-path imports. That refreshes the systemd
+sandbox policy; normal Unix ownership and permissions still apply.
+
 To upgrade from a newer trusted release checkout:
 
 ```bash
