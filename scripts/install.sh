@@ -33,12 +33,15 @@ if [[ ${EUID} -ne 0 ]]; then
   exit 1
 fi
 
-SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+SOURCE_DIR=
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+  SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+fi
 
 # When install.sh is piped directly to Bash it has no accompanying checkout.
 # Fetch a temporary copy and hand the original arguments to that copy. When
 # run from a checkout, continue directly with the local source instead.
-if [[ ! -d "$SOURCE_DIR/app" || ! -f "$SOURCE_DIR/requirements.txt" ]]; then
+if [[ -z "$SOURCE_DIR" || ! -d "$SOURCE_DIR/app" || ! -f "$SOURCE_DIR/requirements.txt" ]]; then
   REPOSITORY=${STEMCRAFT_CONSOLE_REPOSITORY:-stemmechanics/stemcraft-console}
   REF=${STEMCRAFT_CONSOLE_REF:-main}
 
@@ -109,6 +112,8 @@ case "$OS_ID" in
 esac
 
 if [[ "$SKIP_PACKAGES" == false ]]; then
+  echo
+  echo "==> Installing operating-system packages"
   if [[ "$PACKAGE_MANAGER" == apt ]]; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
@@ -147,9 +152,12 @@ for required in app migrations alembic.ini requirements.txt deploy/stemcraft-con
   }
 done
 
+REPAIR_INSTALL=false
 if [[ -e "$INSTALL_DIR/app" ]]; then
-  echo "STEMCraft Console is already installed. Use scripts/upgrade.sh." >&2
-  exit 1
+  REPAIR_INSTALL=true
+  echo
+  echo "==> Existing installation found; repairing application and service files"
+  systemctl stop stemcraft-console.service 2>/dev/null || true
 fi
 
 NOLOGIN_SHELL=$(command -v nologin || true)
@@ -168,12 +176,17 @@ fi
 install -d -m 0755 -o root -g root "$INSTALL_DIR"
 install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR" "$DATA_DIR/upgrades" "$SERVER_DIR"
 install -d -m 0750 -o root -g "$SERVICE_GROUP" "$CONFIG_DIR"
+echo
+echo "==> Installing STEMCraft Console application"
 cp -a "$SOURCE_DIR/app" "$SOURCE_DIR/migrations" "$SOURCE_DIR/alembic.ini" "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/"
 
-"$PYTHON_BIN" -m venv "$INSTALL_DIR/.venv"
+if [[ ! -x "$INSTALL_DIR/.venv/bin/python" ]]; then
+  "$PYTHON_BIN" -m venv "$INSTALL_DIR/.venv"
+fi
 "$INSTALL_DIR/.venv/bin/python" -m pip install --upgrade pip
 "$INSTALL_DIR/.venv/bin/python" -m pip install --requirement "$INSTALL_DIR/requirements.txt"
 
+INITIAL_ADMIN_USER=
 INITIAL_ADMIN_PASSWORD=
 if [[ ! -f "$CONFIG_DIR/console.env" ]]; then
   SECRET=$("$INSTALL_DIR/.venv/bin/python" -c 'import secrets; print(secrets.token_urlsafe(48))')
@@ -189,8 +202,14 @@ if [[ ! -f "$CONFIG_DIR/console.env" ]]; then
     echo "STEMCRAFT_CONSOLE_ADMIN_USER=admin"
     echo "STEMCRAFT_CONSOLE_ADMIN_PASSWORD=$INITIAL_ADMIN_PASSWORD"
   } > "$CONFIG_DIR/console.env"
+  INITIAL_ADMIN_USER=admin
+else
+  INITIAL_ADMIN_USER=$(sed -n 's/^STEMCRAFT_CONSOLE_ADMIN_USER=//p' "$CONFIG_DIR/console.env" | tail -1)
+  INITIAL_ADMIN_PASSWORD=$(sed -n 's/^STEMCRAFT_CONSOLE_ADMIN_PASSWORD=//p' "$CONFIG_DIR/console.env" | tail -1)
 fi
 
+echo
+echo "==> Installing systemd services"
 install -m 0644 "$SOURCE_DIR/deploy/stemcraft-console.service" /etc/systemd/system/stemcraft-console.service
 install -m 0644 "$SOURCE_DIR/deploy/stemcraft-server@.service" /etc/systemd/system/stemcraft-server@.service
 install -d -m 0755 /etc/polkit-1/rules.d
@@ -215,21 +234,46 @@ for _attempt in {1..30}; do
 done
 
 if [[ "$READY" != true ]]; then
-  echo "The service did not start. Recent logs:" >&2
-  journalctl -u stemcraft-console.service --no-pager -n 30 >&2
+  echo >&2
+  echo "STEMCraft Console was installed, but its service did not start." >&2
+  echo "No application data or login details have been removed." >&2
+  if [[ -n "$INITIAL_ADMIN_USER" && -n "$INITIAL_ADMIN_PASSWORD" ]]; then
+    printf 'Initial administrator: %s\nInitial password: %s\n' "$INITIAL_ADMIN_USER" "$INITIAL_ADMIN_PASSWORD" >&2
+  fi
+  echo >&2
+  echo "Useful recovery commands:" >&2
+  echo "  sudo journalctl -u stemcraft-console.service --no-pager -n 200" >&2
+  echo "  sudo systemctl restart stemcraft-console.service" >&2
+  echo "  curl -fsSL https://dev.stemcraft.com.au/install.sh | sudo bash" >&2
+  echo >&2
+  echo "Recent service logs:" >&2
+  journalctl -u stemcraft-console.service --no-pager -n 100 >&2
   exit 1
 fi
 
 cat <<'EOF'
-STEMCraft Console is running at http://127.0.0.1:8000.
+
+============================================================
+ STEMCraft Console installation complete
+============================================================
+
+The service is running at http://127.0.0.1:8000 on this server.
 
 Next steps:
-  1. Configure an HTTPS reverse proxy.
-  2. Sign in and change the generated administrator password.
-  3. Use 'sudo stemcraft-console status' to inspect the service.
+  1. Configure an HTTPS reverse proxy to 127.0.0.1:8000.
+  2. Open that HTTPS address and sign in with the details below.
+  3. Change the generated administrator password immediately.
+
+Service commands:
+  sudo stemcraft-console status
+  sudo stemcraft-console restart
+  sudo stemcraft-console logs
 EOF
 
-if [[ -n "$INITIAL_ADMIN_PASSWORD" ]]; then
-  printf '\nInitial administrator: admin\nInitial password: %s\n' "$INITIAL_ADMIN_PASSWORD"
+if [[ -n "$INITIAL_ADMIN_USER" && -n "$INITIAL_ADMIN_PASSWORD" ]]; then
+  printf '\nInitial administrator: %s\nInitial password: %s\n' "$INITIAL_ADMIN_USER" "$INITIAL_ADMIN_PASSWORD"
   echo "The password is stored in $CONFIG_DIR/console.env until you remove that line."
+elif [[ "$REPAIR_INSTALL" == true ]]; then
+  echo
+  echo "This was a repair installation; use your existing administrator login."
 fi

@@ -70,6 +70,20 @@ the `STEMCRAFT_CONSOLE_ADMIN_PASSWORD` line from
 `/etc/stemcraft-console/console.env`. The value is only used to create an
 administrator when the database does not already contain one.
 
+The installer is safe to run again if the first service start fails. It keeps
+the database, configuration, Minecraft servers, and generated login details
+while repairing the application and systemd files:
+
+```bash
+curl -fsSL https://dev.stemcraft.com.au/install.sh | sudo bash
+```
+
+For startup diagnostics, use:
+
+```bash
+sudo journalctl -u stemcraft-console.service --no-pager -n 200
+```
+
 The panel binds to `127.0.0.1:8000`. Configure an HTTPS reverse proxy before
 exposing it. Persistent files are stored in these locations:
 

@@ -158,7 +158,12 @@ def start_automation() -> None:
     if _thread and _thread.is_alive():
         return
     _stop.clear()
-    collect_metrics()
+    try:
+        collect_metrics()
+    except Exception:
+        # Metrics are auxiliary. A stale or temporarily unavailable Minecraft
+        # process must not prevent the management panel from starting.
+        logger.exception("Initial historical metric collection failed")
     _thread = threading.Thread(target=_automation_loop, name="automation", daemon=True)
     _thread.start()
 
