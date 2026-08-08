@@ -152,6 +152,12 @@ for required in app migrations alembic.ini requirements.txt deploy/stemcraft-con
   }
 done
 
+MIGRATION_FILE=$(find "$SOURCE_DIR/migrations/versions" -maxdepth 1 -type f -name '*.py' -print -quit 2>/dev/null || true)
+if [[ -z "$MIGRATION_FILE" ]]; then
+  echo "Installation source is incomplete: no database migrations were found." >&2
+  exit 1
+fi
+
 REPAIR_INSTALL=false
 if [[ -e "$INSTALL_DIR/app" ]]; then
   REPAIR_INSTALL=true
