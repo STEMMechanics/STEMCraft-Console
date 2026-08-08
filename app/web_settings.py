@@ -54,6 +54,7 @@ from .update_manager import (
     install_release,
     rollback_release,
 )
+from .service_restart import schedule_console_restart
 
 router = APIRouter()
 
@@ -1135,7 +1136,25 @@ async def install_update(request: Request, db: Session = Depends(get_db)):
     data = await request.json()
     try:
         if data.get("action") == "rollback":
-            return rollback_release(str(data.get("rollback_id", "")))
-        return install_release(str(data.get("tag", "")))
+            result = rollback_release(str(data.get("rollback_id", "")))
+        else:
+            result = install_release(str(data.get("tag", "")))
+        schedule_console_restart()
+        result["restarting"] = True
+        return result
+    except Exception as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+
+
+@router.post("/api/web/settings/restart")
+def restart_console(request: Request, db: Session = Depends(get_db)):
+    user = current_web_user(request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if user.role != "admin":
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+    try:
+        schedule_console_restart()
+        return {"restarting": True}
     except Exception as error:
         return JSONResponse({"error": str(error)}, status_code=400)

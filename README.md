@@ -296,6 +296,11 @@ The application also applies pending migrations automatically during startup.
 Running the command manually remains useful for deployments that migrate before
 restarting the service.
 
+Administrators can check for releases, install or roll back an update, and
+restart the console from the Application Version row in System Settings. The
+panel waits for systemd to bring the service back and then reloads the page, so
+routine upgrades do not require an SSH session.
+
 Developers making model changes can generate a migration with:
 
 ```bash

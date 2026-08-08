@@ -4245,12 +4245,65 @@ async function upgradeConsole() {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Update failed");
-    status.textContent = "Installed; restart the service to finish";
+    status.textContent = "Installed; restarting console...";
     if (data.rollback_id) {
       sessionStorage.setItem("consoleRollbackId", data.rollback_id);
       document.getElementById("console-rollback-button").hidden = false;
     }
     button.hidden = true;
+    await waitForConsoleRestart();
+  } catch (error) {
+    status.textContent = error.message;
+    button.disabled = false;
+  }
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForConsoleRestart() {
+  const status = document.getElementById("console-update-status");
+  const deadline = Date.now() + 90000;
+
+  await delay(2500);
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`/health?restart=${Date.now()}`, {
+        cache: "no-store",
+      });
+      if (response.ok) {
+        window.location.reload();
+        return;
+      }
+    } catch {
+      // The service is expected to be briefly unavailable while systemd restarts it.
+    }
+    await delay(1000);
+  }
+
+  if (status) {
+    status.textContent = "Restart is taking longer than expected; refresh this page shortly";
+  }
+  const button = document.getElementById("console-restart-button");
+  if (button) button.disabled = false;
+}
+
+async function restartConsoleService() {
+  if (!confirm("Restart STEMCraft Console now?")) return;
+
+  const button = document.getElementById("console-restart-button");
+  const status = document.getElementById("console-update-status");
+  button.disabled = true;
+  status.textContent = "Restarting console...";
+
+  try {
+    const response = await fetch("/api/web/settings/restart", {
+      method: "POST",
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Restart failed");
+    await waitForConsoleRestart();
   } catch (error) {
     status.textContent = error.message;
     button.disabled = false;
@@ -4415,9 +4468,10 @@ async function rollbackConsoleUpdate() {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Rollback failed");
-    status.textContent = "Previous version restored; restart the service";
+    status.textContent = "Previous version restored; restarting console...";
     sessionStorage.removeItem("consoleRollbackId");
     button.hidden = true;
+    await waitForConsoleRestart();
   } catch (error) {
     status.textContent = error.message;
     button.disabled = false;
