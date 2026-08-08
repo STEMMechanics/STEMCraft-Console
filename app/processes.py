@@ -65,7 +65,7 @@ def _systemctl(config: ServerProcessConfig, action: str, check: bool = True):
     unit = f"{SYSTEMD_UNIT_PREFIX}{config.service_name}.service"
     command = ["systemctl", action, unit]
     if action == "show":
-        command.extend(["--property=ActiveState,MainPID", "--value"])
+        command.extend(["--property=ActiveState", "--property=MainPID"])
     return subprocess.run(command, capture_output=True, text=True, timeout=30, check=check)
 
 
@@ -73,10 +73,16 @@ def _systemd_status(config: ServerProcessConfig) -> dict:
     result = _systemctl(config, "show", check=False)
     if result.returncode != 0:
         return {"running": False, "pid": None, "backend": "systemd"}
-    values = result.stdout.splitlines()
-    active = values[0].strip() if values else "inactive"
+    properties = {}
+    for line in result.stdout.splitlines():
+        key, separator, value = line.partition("=")
+        if separator:
+            properties[key.strip()] = value.strip()
+
+    active = properties.get("ActiveState", "inactive")
     try:
-        pid = int(values[1]) if len(values) > 1 and values[1] else None
+        pid_value = int(properties.get("MainPID", "0"))
+        pid = pid_value or None
     except ValueError:
         pid = None
     return {"running": active in {"active", "activating"}, "pid": pid, "backend": "systemd"}

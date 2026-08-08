@@ -254,7 +254,7 @@ def create_server_web(
     ),
 
     process_backend: str = Form(
-        default="subprocess"
+        default="systemd"
     ),
 
     port: int = Form(
@@ -1440,7 +1440,7 @@ def import_server(
     port: int = Form(default=25565),
     jar_name: str = Form(default="paper.jar"),
     memory: str = Form(default="2G"),
-    process_backend: str = Form(default="subprocess"),
+    process_backend: str = Form(default="systemd"),
 
     db: Session = Depends(get_db),
 ):

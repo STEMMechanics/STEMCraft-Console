@@ -68,7 +68,7 @@ class ServerCreate(BaseModel):
     memory: str = Field(default="2G", pattern=r"^[1-9][0-9]*[KMGkmg]$")
     jar_name: str = Field(default="paper.jar", pattern=r"^[^/\\]+\.jar$")
     java_args: str = Field(default="", max_length=1000)
-    process_backend: ProcessBackend = "subprocess"
+    process_backend: ProcessBackend = "systemd"
 
     port: int = Field(
         default=25565,

@@ -128,8 +128,8 @@
                 <label class="property-field">
                     <span>Process Backend</span>
                     <select name="process_backend">
+                        <option value="systemd" selected>Production (independent systemd service)</option>
                         <option value="subprocess">Development (panel-owned)</option>
-                        <option value="systemd">Production (independent systemd service)</option>
                     </select>
                     <small>Use systemd on production Linux so Minecraft survives panel restarts.</small>
                 </label>
