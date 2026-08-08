@@ -3,24 +3,46 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: sudo ./scripts/install.sh [--skip-packages]
+Usage: sudo ./scripts/install.sh [OPTIONS]
 
 Installs STEMCraft Console on Ubuntu or Oracle Linux. By default the installer
 uses apt or dnf to install Python 3.10+, Java 21, polkit and supporting tools.
 
 Options:
-  --skip-packages  Do not install operating-system packages.
-  -h, --help       Show this help.
+  --host ADDRESS     Bind address (default: prompted, then 127.0.0.1).
+  --port PORT        Web port from 1024 to 65535 (default: prompted, then 8000).
+  --non-interactive  Accept defaults instead of prompting.
+  --skip-packages    Do not install operating-system packages.
+  -h, --help         Show this help.
 EOF
 }
 
 SKIP_PACKAGES=false
+NON_INTERACTIVE=false
+BIND_HOST=
+WEB_PORT=
 INSTALL_ARGS=()
 while (($#)); do
   case "$1" in
     --skip-packages)
       SKIP_PACKAGES=true
       INSTALL_ARGS+=(--skip-packages)
+      ;;
+    --non-interactive)
+      NON_INTERACTIVE=true
+      INSTALL_ARGS+=(--non-interactive)
+      ;;
+    --host)
+      [[ $# -ge 2 ]] || { echo "--host requires an address." >&2; exit 2; }
+      BIND_HOST=$2
+      INSTALL_ARGS+=(--host "$2")
+      shift
+      ;;
+    --port)
+      [[ $# -ge 2 ]] || { echo "--port requires a value." >&2; exit 2; }
+      WEB_PORT=$2
+      INSTALL_ARGS+=(--port "$2")
+      shift
       ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -96,6 +118,10 @@ if [[ -z "$SOURCE_DIR" || ! -d "$SOURCE_DIR/app" || ! -f "$SOURCE_DIR/requiremen
   exit $?
 fi
 
+# shellcheck disable=SC1091
+source "$SOURCE_DIR/scripts/common.sh"
+banner "STEMCraft Console Installer"
+
 if [[ ! -r /etc/os-release ]]; then
   echo "Unable to identify this Linux distribution." >&2
   exit 1
@@ -132,8 +158,7 @@ case "$OS_ID" in
 esac
 
 if [[ "$SKIP_PACKAGES" == false ]]; then
-  echo
-  echo "==> Installing operating-system packages"
+  section "Installing operating-system packages"
   if [[ "$PACKAGE_MANAGER" == apt ]]; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
@@ -143,7 +168,7 @@ if [[ "$SKIP_PACKAGES" == false ]]; then
   fi
 fi
 
-for command in "$PYTHON_BIN" systemctl useradd install cp; do
+for command in "$PYTHON_BIN" systemctl useradd install cp runuser; do
   command -v "$command" >/dev/null 2>&1 || {
     echo "Required command not found: $command" >&2
     exit 1
@@ -165,7 +190,7 @@ CONFIG_DIR=/etc/stemcraft-console
 SERVICE_USER=stemcraft
 SERVICE_GROUP=stemcraft
 
-for required in app migrations alembic.ini requirements.txt deploy/stemcraft-console.service deploy/stemcraft-server@.service deploy/50-stemcraft-console.rules deploy/stemcraft-console; do
+for required in app migrations alembic.ini requirements.txt deploy/stemcraft-console.service deploy/stemcraft-server@.service deploy/50-stemcraft-console.rules deploy/stemcraft-console scripts/common.sh; do
   [[ -e "$SOURCE_DIR/$required" ]] || {
     echo "Installation source is incomplete: missing $required" >&2
     exit 1
@@ -181,10 +206,42 @@ fi
 REPAIR_INSTALL=false
 if [[ -e "$INSTALL_DIR/app" ]]; then
   REPAIR_INSTALL=true
-  echo
-  echo "==> Existing installation found; repairing application and service files"
+  section "Existing installation found; repairing application and service files"
   systemctl stop stemcraft-console.service 2>/dev/null || true
 fi
+
+CONFIG_FILE=$CONFIG_DIR/console.env
+if [[ -f "$CONFIG_FILE" ]]; then
+  CONFIGURED_HOST=$(sed -n 's/^STEMCRAFT_CONSOLE_HOST=//p' "$CONFIG_FILE" | tail -1)
+  CONFIGURED_PORT=$(sed -n 's/^STEMCRAFT_CONSOLE_PORT=//p' "$CONFIG_FILE" | tail -1)
+else
+  CONFIGURED_HOST=
+  CONFIGURED_PORT=
+fi
+
+BIND_HOST=${BIND_HOST:-${CONFIGURED_HOST:-127.0.0.1}}
+WEB_PORT=${WEB_PORT:-${CONFIGURED_PORT:-8000}}
+
+if [[ "$REPAIR_INSTALL" == false && "$NON_INTERACTIVE" == false && -r /dev/tty ]]; then
+  answer=
+  printf 'Bind address [%s] (use 0.0.0.0 for all interfaces): ' "$BIND_HOST" >/dev/tty
+  read -r answer </dev/tty || true
+  BIND_HOST=${answer:-$BIND_HOST}
+  answer=
+  printf 'Web port [%s]: ' "$WEB_PORT" >/dev/tty
+  read -r answer </dev/tty || true
+  WEB_PORT=${answer:-$WEB_PORT}
+fi
+
+"$PYTHON_BIN" - "$BIND_HOST" <<'PY' || die "Bind address must be a valid IPv4 or IPv6 address."
+import ipaddress
+import sys
+ipaddress.ip_address(sys.argv[1])
+PY
+[[ "$WEB_PORT" =~ ^[0-9]+$ ]] && ((WEB_PORT >= 1024 && WEB_PORT <= 65535)) || \
+  die "Web port must be a number from 1024 to 65535."
+
+info "Web service will bind to $BIND_HOST:$WEB_PORT"
 
 NOLOGIN_SHELL=$(command -v nologin || true)
 NOLOGIN_SHELL=${NOLOGIN_SHELL:-/sbin/nologin}
@@ -202,8 +259,7 @@ fi
 install -d -m 0755 -o root -g root "$INSTALL_DIR"
 install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR" "$DATA_DIR/upgrades" "$SERVER_DIR"
 install -d -m 0750 -o root -g "$SERVICE_GROUP" "$CONFIG_DIR"
-echo
-echo "==> Installing STEMCraft Console application"
+section "Installing STEMCraft Console application"
 cp -a "$SOURCE_DIR/app" "$SOURCE_DIR/migrations" "$SOURCE_DIR/alembic.ini" "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/"
 
 if [[ ! -x "$INSTALL_DIR/.venv/bin/python" ]]; then
@@ -212,32 +268,51 @@ fi
 "$INSTALL_DIR/.venv/bin/python" -m pip install --upgrade pip
 "$INSTALL_DIR/.venv/bin/python" -m pip install --requirement "$INSTALL_DIR/requirements.txt"
 
-INITIAL_ADMIN_USER=
-INITIAL_ADMIN_PASSWORD=
-if [[ ! -f "$CONFIG_DIR/console.env" ]]; then
+LEGACY_ADMIN_USER=
+LEGACY_ADMIN_PASSWORD=
+if [[ ! -f "$CONFIG_FILE" ]]; then
   SECRET=$("$INSTALL_DIR/.venv/bin/python" -c 'import secrets; print(secrets.token_urlsafe(48))')
-  INITIAL_ADMIN_PASSWORD=$("$INSTALL_DIR/.venv/bin/python" -c 'import secrets; print(secrets.token_urlsafe(18))')
-  install -m 0640 -o root -g "$SERVICE_GROUP" /dev/null "$CONFIG_DIR/console.env"
+  install -m 0640 -o root -g "$SERVICE_GROUP" /dev/null "$CONFIG_FILE"
   {
     echo "STEMCRAFT_CONSOLE_SECRET=$SECRET"
     echo "STEMCRAFT_CONSOLE_DATABASE=$DATA_DIR/stemcraft-console.db"
     echo "STEMCRAFT_CONSOLE_SERVER_ROOT=$SERVER_DIR"
-    echo "STEMCRAFT_CONSOLE_HOST=127.0.0.1"
-    echo "STEMCRAFT_CONSOLE_PORT=8000"
-    # The panel initially binds to localhost over HTTP. Enable secure cookies
-    # after an HTTPS reverse proxy has been configured.
+    echo "STEMCRAFT_CONSOLE_HOST=$BIND_HOST"
+    echo "STEMCRAFT_CONSOLE_PORT=$WEB_PORT"
+    # Enable secure cookies after an HTTPS reverse proxy has been configured.
     echo "STEMCRAFT_CONSOLE_COOKIE_SECURE=false"
-    echo "STEMCRAFT_CONSOLE_ADMIN_USER=admin"
-    echo "STEMCRAFT_CONSOLE_ADMIN_PASSWORD=$INITIAL_ADMIN_PASSWORD"
-  } > "$CONFIG_DIR/console.env"
-  INITIAL_ADMIN_USER=admin
+  } > "$CONFIG_FILE"
 else
-  INITIAL_ADMIN_USER=$(sed -n 's/^STEMCRAFT_CONSOLE_ADMIN_USER=//p' "$CONFIG_DIR/console.env" | tail -1)
-  INITIAL_ADMIN_PASSWORD=$(sed -n 's/^STEMCRAFT_CONSOLE_ADMIN_PASSWORD=//p' "$CONFIG_DIR/console.env" | tail -1)
+  LEGACY_ADMIN_USER=$(sed -n 's/^STEMCRAFT_CONSOLE_ADMIN_USER=//p' "$CONFIG_FILE" | tail -1)
+  LEGACY_ADMIN_PASSWORD=$(sed -n 's/^STEMCRAFT_CONSOLE_ADMIN_PASSWORD=//p' "$CONFIG_FILE" | tail -1)
+  sed -i '/^STEMCRAFT_CONSOLE_HOST=/d;/^STEMCRAFT_CONSOLE_PORT=/d' "$CONFIG_FILE"
+  {
+    echo "STEMCRAFT_CONSOLE_HOST=$BIND_HOST"
+    echo "STEMCRAFT_CONSOLE_PORT=$WEB_PORT"
+  } >> "$CONFIG_FILE"
 fi
 
-echo
-echo "==> Installing systemd services"
+section "Preparing database and administrator account"
+(
+  cd "$INSTALL_DIR"
+  runuser -u "$SERVICE_USER" -- env \
+    STEMCRAFT_CONSOLE_ENV="$CONFIG_FILE" \
+    "$INSTALL_DIR/.venv/bin/python" -c \
+    'from app.migrations import upgrade_database; upgrade_database()'
+)
+
+INITIAL_ADMIN_USER=${LEGACY_ADMIN_USER:-admin}
+INITIAL_ADMIN_PASSWORD=$(
+  cd "$INSTALL_DIR"
+  runuser -u "$SERVICE_USER" -- env \
+    STEMCRAFT_CONSOLE_ENV="$CONFIG_FILE" \
+    STEMCRAFT_BOOTSTRAP_ADMIN_PASSWORD="$LEGACY_ADMIN_PASSWORD" \
+    "$INSTALL_DIR/.venv/bin/python" -m app.admin_cli ensure-admin \
+    --username "$INITIAL_ADMIN_USER"
+)
+sed -i '/^STEMCRAFT_CONSOLE_ADMIN_USER=/d;/^STEMCRAFT_CONSOLE_ADMIN_PASSWORD=/d' "$CONFIG_FILE"
+
+section "Installing systemd services"
 install -m 0644 "$SOURCE_DIR/deploy/stemcraft-console.service" /etc/systemd/system/stemcraft-console.service
 install -m 0644 "$SOURCE_DIR/deploy/stemcraft-server@.service" /etc/systemd/system/stemcraft-server@.service
 install -d -m 0755 /etc/polkit-1/rules.d
@@ -250,8 +325,16 @@ systemctl daemon-reload
 systemctl enable --now stemcraft-console.service
 
 READY=false
+HEALTH_HOST=$BIND_HOST
+[[ "$HEALTH_HOST" == "0.0.0.0" ]] && HEALTH_HOST=127.0.0.1
+[[ "$HEALTH_HOST" == "::" ]] && HEALTH_HOST=::1
+if [[ "$HEALTH_HOST" == *:* ]]; then
+  HEALTH_URL="http://[$HEALTH_HOST]:$WEB_PORT/health"
+else
+  HEALTH_URL="http://$HEALTH_HOST:$WEB_PORT/health"
+fi
 for _attempt in {1..30}; do
-  if curl --fail --silent http://127.0.0.1:8000/health >/dev/null; then
+  if curl --fail --silent --globoff --noproxy '*' "$HEALTH_URL" >/dev/null; then
     READY=true
     break
   fi
@@ -265,7 +348,7 @@ if [[ "$READY" != true ]]; then
   echo >&2
   echo "STEMCraft Console was installed, but its service did not start." >&2
   echo "No application data or login details have been removed." >&2
-  if [[ -n "$INITIAL_ADMIN_USER" && -n "$INITIAL_ADMIN_PASSWORD" ]]; then
+  if [[ -n "$INITIAL_ADMIN_PASSWORD" ]]; then
     printf 'Initial administrator: %s\nInitial password: %s\n' "$INITIAL_ADMIN_USER" "$INITIAL_ADMIN_PASSWORD" >&2
   fi
   echo >&2
@@ -279,30 +362,27 @@ if [[ "$READY" != true ]]; then
   exit 1
 fi
 
-cat <<'EOF'
-
-============================================================
- STEMCraft Console installation complete
-============================================================
-
-The service is running at http://127.0.0.1:8000 on this server.
+banner "STEMCraft Console installation complete"
+cat <<EOF
+The service is bound to $BIND_HOST:$WEB_PORT.
 
 Next steps:
-  1. Configure an HTTPS reverse proxy to 127.0.0.1:8000.
+  1. Configure an HTTPS reverse proxy to $BIND_HOST:$WEB_PORT.
   2. Open that HTTPS address and sign in with the details below.
-  3. Change the generated administrator password immediately.
-  4. Set STEMCRAFT_CONSOLE_COOKIE_SECURE=true in
+  3. Set STEMCRAFT_CONSOLE_COOKIE_SECURE=true in
      /etc/stemcraft-console/console.env and restart the service.
 
 Service commands:
   sudo stemcraft-console status
   sudo stemcraft-console restart
   sudo stemcraft-console logs
+  sudo stemcraft-console reset-password [USERNAME]
 EOF
 
-if [[ -n "$INITIAL_ADMIN_USER" && -n "$INITIAL_ADMIN_PASSWORD" ]]; then
+if [[ -n "$INITIAL_ADMIN_PASSWORD" ]]; then
   printf '\nInitial administrator: %s\nInitial password: %s\n' "$INITIAL_ADMIN_USER" "$INITIAL_ADMIN_PASSWORD"
-  echo "The password is stored in $CONFIG_DIR/console.env until you remove that line."
+  echo "This password is shown once and stored only as a hash in the database."
+  echo "You must change it when you first sign in."
 elif [[ "$REPAIR_INSTALL" == true ]]; then
   echo
   echo "This was a repair installation; use your existing administrator login."

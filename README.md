@@ -65,11 +65,18 @@ The installer installs Python, Java 21, polkit and supporting system packages.
 Use `--skip-packages` only when those dependencies have already been installed.
 It does not configure a firewall or reverse proxy.
 
+On a fresh interactive installation, it asks for the IP address and port the
+web service should bind to. Press Enter to keep `127.0.0.1:8000`. For unattended
+installation, provide explicit values or accept the defaults:
+
+```bash
+sudo ./scripts/install.sh --host 127.0.0.1 --port 8000 --non-interactive
+```
+
 On a fresh installation it prints a generated password for the initial `admin`
-account. Sign in through HTTPS, change that password immediately, then remove
-the `STEMCRAFT_CONSOLE_ADMIN_PASSWORD` line from
-`/etc/stemcraft-console/console.env`. The value is only used to create an
-administrator when the database does not already contain one.
+account exactly once. Only its one-way hash is stored in the database; the
+plaintext password is not written to `console.env`. The account must change the
+temporary password after signing in.
 
 The initial configuration permits its session cookie over HTTP because the
 panel starts on localhost before a reverse proxy is configured. Once HTTPS is
@@ -94,8 +101,9 @@ For startup diagnostics, use:
 sudo journalctl -u stemcraft-console.service --no-pager -n 200
 ```
 
-The panel binds to `127.0.0.1:8000`. Configure an HTTPS reverse proxy before
-exposing it. Persistent files are stored in these locations:
+The panel binds to the address and port selected during installation. Configure
+an HTTPS reverse proxy before exposing it. Persistent files are stored in these
+locations:
 
 | Path | Purpose |
 | --- | --- |
@@ -110,6 +118,7 @@ Useful service commands are available through the installed helper:
 sudo stemcraft-console status
 sudo stemcraft-console restart
 stemcraft-console logs
+sudo stemcraft-console reset-password admin
 sudo stemcraft-console server survival restart
 stemcraft-console server survival logs
 ```
@@ -196,6 +205,12 @@ Apply the database migrations:
 alembic upgrade head
 ```
 
+Create the first local administrator and save the temporary password shown:
+
+```bash
+python -m app.admin_cli ensure-admin --username admin
+```
+
 Start STEMCraft Console:
 
 ```bash
@@ -232,7 +247,7 @@ override it with `STEMCRAFT_CONSOLE_MAX_UPLOAD_BYTES` when required.
 | Python      | Python 3.10 or newer                                                |
 | Database    | SQLite                                                             |
 | Java        | Java 21 by default; the managed Minecraft version must support it   |
-| Development | macOS is supported for local development                           |
+| Development | macOS is supported locally; Windows is not currently supported     |
 
 > PaperMC is the primary server platform targeted by STEMCraft Console. Other Paper-compatible or Bukkit-derived implementations may work but are not currently tested or officially supported.
 

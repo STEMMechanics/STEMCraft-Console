@@ -12,7 +12,6 @@ load_dotenv(
 from fastapi import FastAPI
 
 from .version import APP_VERSION
-from .auth import hash_password
 from .config import COOKIE_SECURE, SECRET_KEY
 from .migrations import upgrade_database
 from .processes import register_server
@@ -20,8 +19,6 @@ from .processes import register_server
 from .database import (
     SessionLocal,
 )
-
-from .models import User
 
 from .routers_auth import (
     router as auth_router,
@@ -165,7 +162,6 @@ app.include_router(web_automation_router)
 @app.on_event("startup")
 def startup():
     upgrade_database()
-    create_initial_admin()
     db = SessionLocal()
     try:
         from .models import Server
@@ -179,58 +175,6 @@ def startup():
 @app.on_event("shutdown")
 def shutdown():
     stop_automation()
-
-
-def create_initial_admin():
-
-    username = os.getenv(
-        "STEMCRAFT_CONSOLE_ADMIN_USER"
-    )
-
-    password = os.getenv(
-        "STEMCRAFT_CONSOLE_ADMIN_PASSWORD"
-    )
-
-    if not username or not password:
-        return
-
-    db = SessionLocal()
-
-    try:
-
-        existing_admin = (
-            db.query(User)
-            .filter(
-                User.role == "admin"
-            )
-            .first()
-        )
-
-        if existing_admin:
-            return
-
-        user = User(
-            username=username,
-
-            password_hash=hash_password(
-                password
-            ),
-
-            role="admin",
-
-            enabled=True,
-        )
-
-        db.add(user)
-        db.commit()
-
-        print(
-            f"Created admin user: "
-            f"{username}"
-        )
-
-    finally:
-        db.close()
 
 
 @app.get("/")

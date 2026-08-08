@@ -14,7 +14,7 @@ body:
     id: current
     attributes:
       label: What does it do today?
-      placeholder: RAM allocation is set in GB.
+      placeholder: The Overview uptime only changes after reloading the page.
     validations:
       required: true
 
@@ -22,7 +22,7 @@ body:
     id: proposed
     attributes:
       label: What should it do instead?
-      placeholder: Allocation should be in MB, so you can pick something between 4 GB and 6 GB.
+      placeholder: The uptime should update while the server is running.
     validations:
       required: true
 

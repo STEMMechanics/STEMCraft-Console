@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest something Fabricator doesn't do yet.
+description: Suggest something STEMCraft Console doesn't do yet.
 labels: ["enhancement", "needs-triage"]
 body:
   - type: markdown
@@ -22,7 +22,7 @@ body:
   - type: textarea
     id: solution
     attributes:
-      label: What would you like Fabricator to do?
+      label: What would you like STEMCraft Console to do?
     validations:
       required: true
 
@@ -35,11 +35,11 @@ body:
   - type: input
     id: setup
     attributes:
-      label: How do you run Fabricator?
+      label: How do you run STEMCraft Console?
       description: |
-        Optional, but useful. Number of servers and which loader. Most people run
-        one server, and that shapes what we build.
-      placeholder: 1 server, Fabric 1.21.1
+        Optional, but useful. Include the number of servers, Minecraft versions,
+        and whether they use systemd.
+      placeholder: 2 Paper servers on Ubuntu 24.04 using systemd
 
   - type: dropdown
     id: implement
