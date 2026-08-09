@@ -27,13 +27,13 @@
         <div>
             <i class="fa-solid fa-rotate"></i>
 
-            <span>
+            <span id="properties-pending-message">
                 Property changes are pending.
                 Restart the server to apply them.
             </span>
         </div>
 
-        <span class="restart-required">
+        <span id="properties-pending-label" class="restart-required">
             Restart required
         </span>
     </div>
@@ -43,6 +43,48 @@
         id="properties-form"
         onsubmit="saveServerProperties(event)"
     >
+
+        <section class="overview-card property-section">
+
+            <div class="card-header">
+                Startup and Memory
+            </div>
+
+            <div class="property-grid">
+
+                <label class="property-field">
+                    <span>Initial RAM</span>
+                    <input id="property-min-memory" type="text" inputmode="text" placeholder="2G or 2GB" oninput="updateStartupCommandPreview()" onblur="normalizeStartupMemoryInput(this)">
+                    <small>Java <code>-Xms</code>. Memory reserved when the server starts.</small>
+                </label>
+
+                <label class="property-field">
+                    <span>Maximum RAM</span>
+                    <input id="property-max-memory" type="text" inputmode="text" placeholder="2G or 2GB" oninput="updateStartupCommandPreview()" onblur="normalizeStartupMemoryInput(this)">
+                    <small>Java <code>-Xmx</code>. The upper memory allocation limit.</small>
+                </label>
+
+                <label class="property-field">
+                    <span>Server JAR</span>
+                    <input id="property-jar-name" type="text" list="server-jar-files" placeholder="paper.jar" oninput="updateStartupCommandPreview()">
+                    <datalist id="server-jar-files"></datalist>
+                    <small>JAR file in the server directory.</small>
+                </label>
+
+                <label class="property-field full-width">
+                    <span>Java Startup Options</span>
+                    <input id="property-java-args" type="text" placeholder="No additional options (default)" oninput="updateStartupCommandPreview()">
+                    <small>Optional JVM arguments inserted before <code>-jar</code>. RAM flags are managed above.</small>
+                </label>
+
+                <div class="property-field full-width startup-command-preview">
+                    <span>Effective startup command</span>
+                    <code id="startup-command-preview">java -Xms2G -Xmx2G -jar paper.jar --nogui</code>
+                </div>
+
+            </div>
+
+        </section>
 
         <section class="overview-card property-section">
 

@@ -1,3 +1,151 @@
+const recentToasts = new Map();
+
+function showToast(message, type = "info", timeout = 4500) {
+  const text = String(message || "").trim();
+  if (!text) return;
+  const now = Date.now();
+  if (now - (recentToasts.get(`${type}:${text}`) || 0) < 1200) return;
+  recentToasts.set(`${type}:${text}`, now);
+
+  let region = document.getElementById("toast-region");
+  if (!region) {
+    region = document.createElement("div");
+    region.id = "toast-region";
+    region.className = "toast-region";
+    region.setAttribute("aria-live", "polite");
+    document.body.append(region);
+  }
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.setAttribute("role", type === "error" ? "alert" : "status");
+  const icon = document.createElement("i");
+  icon.className = type === "success"
+    ? "fa-solid fa-circle-check"
+    : type === "error"
+      ? "fa-solid fa-circle-exclamation"
+      : "fa-solid fa-circle-info";
+  const content = document.createElement("span");
+  content.textContent = text;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "toast-close";
+  close.setAttribute("aria-label", "Dismiss notification");
+  close.innerHTML = "&times;";
+  close.addEventListener("click", () => toast.remove());
+  toast.append(icon, content, close);
+  region.append(toast);
+  requestAnimationFrame(() => toast.classList.add("visible"));
+  window.setTimeout(() => {
+    toast.classList.remove("visible");
+    window.setTimeout(() => toast.remove(), 200);
+  }, timeout);
+}
+
+function clearFieldError(field) {
+  if (!field) return;
+  field.classList.remove("field-invalid");
+  field.removeAttribute("aria-invalid");
+  if (field.nextElementSibling?.classList.contains("field-error-message")) {
+    field.nextElementSibling.remove();
+  }
+}
+
+function setFieldError(field, message) {
+  if (!field) return false;
+  clearFieldError(field);
+  field.classList.add("field-invalid");
+  field.setAttribute("aria-invalid", "true");
+  const error = document.createElement("small");
+  error.className = "field-error-message";
+  error.textContent = message;
+  field.insertAdjacentElement("afterend", error);
+  return true;
+}
+
+function clearFormErrors(form) {
+  if (!form) return;
+  form.querySelectorAll(".field-invalid").forEach((field) => clearFieldError(field));
+  form.querySelectorAll(".field-error-message").forEach((error) => error.remove());
+}
+
+function fieldForServerError(form, fieldName) {
+  if (!form || !fieldName) return null;
+  const normalized = String(fieldName).replaceAll("_", "-");
+  return form.querySelector(`[name="${CSS.escape(fieldName)}"]`)
+    || form.querySelector(`#property-${CSS.escape(normalized)}`)
+    || form.querySelector(`#${CSS.escape(normalized)}`);
+}
+
+function showFormError(form, message, fieldName = null) {
+  const field = fieldForServerError(form, fieldName);
+  if (field) {
+    setFieldError(field, message);
+    field.focus();
+  }
+  showToast(message, "error");
+}
+
+document.addEventListener("invalid", (event) => {
+  const field = event.target;
+  if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement)) return;
+  setFieldError(field, field.validationMessage || "Check this value");
+  showToast("Please correct the highlighted fields.", "error");
+}, true);
+
+document.addEventListener("input", (event) => clearFieldError(event.target));
+document.addEventListener("change", (event) => clearFieldError(event.target));
+
+// Existing actions that still call alert now use the common non-blocking UI.
+window.alert = (message) => showToast(message, "error");
+
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  try {
+    const response = await nativeFetch(...args);
+    const request = args[0];
+    const options = args[1] || {};
+    const method = String(options.method || request?.method || "GET").toUpperCase();
+    if (!new Set(["GET", "HEAD", "OPTIONS"]).has(method)) {
+      response.clone().json().then((data) => {
+        const message = data?.message || data?.error;
+        if (!response.ok) {
+          showToast(message || "The action could not be completed.", "error");
+        } else {
+          showToast(message || "Action completed successfully.", "success");
+        }
+      }).catch(() => {
+        showToast(
+          response.ok ? "Action completed successfully." : "The action could not be completed.",
+          response.ok ? "success" : "error",
+        );
+      });
+    }
+    return response;
+  } catch (error) {
+    showToast("Unable to connect to the server.", "error");
+    throw error;
+  }
+};
+
+document.addEventListener("htmx:afterRequest", (event) => {
+  const detail = event.detail || {};
+  const verb = String(detail.requestConfig?.verb || "GET").toUpperCase();
+  if (new Set(["GET", "HEAD", "OPTIONS"]).has(verb)) return;
+  let data = {};
+  try {
+    data = JSON.parse(detail.xhr?.responseText || "{}");
+  } catch {
+    data = {};
+  }
+  if (detail.successful) {
+    clearFormErrors(detail.elt?.closest?.("form"));
+    showToast(data.message || "Action completed successfully.", "success");
+  } else {
+    const message = data.error || "The action could not be completed.";
+    showFormError(detail.elt?.closest?.("form"), message, data.field);
+  }
+});
+
 function updateActiveNavigation() {
   const path = window.location.pathname;
 
@@ -2833,6 +2981,28 @@ async function updatePropertiesPage() {
     const data = await response.json();
 
     const p = data.properties;
+    const startup = data.startup || {};
+
+    setValue("property-min-memory", startup.min_memory || "2G");
+    setValue("property-max-memory", startup.max_memory || "2G");
+    setValue("property-jar-name", startup.jar_name || "paper.jar");
+    setValue("property-java-args", startup.java_args || "");
+
+    const jarList = document.getElementById("server-jar-files");
+    if (jarList) {
+      jarList.replaceChildren(
+        ...(startup.jar_files || []).map((name) => {
+          const option = document.createElement("option");
+          option.value = name;
+          return option;
+        }),
+      );
+    }
+
+    const commandPreview = document.getElementById("startup-command-preview");
+    if (commandPreview && Array.isArray(startup.command)) {
+      commandPreview.textContent = startup.command.join(" ");
+    }
 
     setValue(
       "property-motd",
@@ -2980,6 +3150,14 @@ async function saveServerProperties(
   }
 
   const payload = {
+    min_memory: normalizedStartupMemory("property-min-memory"),
+
+    max_memory: normalizedStartupMemory("property-max-memory"),
+
+    jar_name: valueOf("property-jar-name"),
+
+    java_args: valueOf("property-java-args"),
+
     motd: valueOf(
       "property-motd",
     ),
@@ -3083,6 +3261,11 @@ async function saveServerProperties(
   );
 
   if (!response.ok) {
+    showFormError(
+      document.getElementById("properties-form"),
+      data.error || "Save failed.",
+      data.field,
+    );
     if (status) {
       status.textContent = data.error ||
         "Save failed.";
@@ -3094,6 +3277,7 @@ async function saveServerProperties(
   if (status) {
     status.textContent = "Saved";
   }
+  clearFormErrors(document.getElementById("properties-form"));
 
   const restartAlert = document.getElementById(
     "properties-restart-alert",
@@ -3101,7 +3285,56 @@ async function saveServerProperties(
 
   if (restartAlert) {
     restartAlert.hidden = false;
+    const message = document.getElementById("properties-pending-message");
+    const label = document.getElementById("properties-pending-label");
+    if (data.running) {
+      if (message) message.textContent = "Property changes are pending. Restart the server to apply them.";
+      if (label) label.textContent = "Restart required";
+    } else {
+      if (message) message.textContent = "Changes saved. They will apply when the server is next started.";
+      if (label) label.textContent = "Applies on next start";
+    }
   }
+}
+
+function updateStartupCommandPreview() {
+  const preview = document.getElementById("startup-command-preview");
+  if (!preview) {
+    return;
+  }
+
+  const initial = valueOf("property-min-memory") || "2G";
+  const maximum = valueOf("property-max-memory") || "2G";
+  const jar = valueOf("property-jar-name") || "paper.jar";
+  const options = valueOf("property-java-args").trim();
+  preview.textContent = [
+    "java",
+    `-Xms${initial}`,
+    `-Xmx${maximum}`,
+    options,
+    "-jar",
+    jar,
+    "--nogui",
+  ].filter(Boolean).join(" ");
+}
+
+function normalizedStartupMemory(id) {
+  const input = document.getElementById(id);
+  const value = input?.value.trim() || "";
+  const match = value.match(/^([1-9][0-9]*)\s*(K|KB|M|MB|G|GB)$/i);
+  if (!match) {
+    return value;
+  }
+  const normalized = `${match[1]}${match[2][0].toUpperCase()}`;
+  if (input) {
+    input.value = normalized;
+  }
+  return normalized;
+}
+
+function normalizeStartupMemoryInput(input) {
+  normalizedStartupMemory(input.id);
+  updateStartupCommandPreview();
 }
 
 function valueOf(id) {

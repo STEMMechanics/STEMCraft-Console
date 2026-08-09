@@ -3,7 +3,12 @@ import pytest
 from types import SimpleNamespace
 
 from app import processes
-from app.processes import build_java_command, register_server
+from app.processes import (
+    build_java_command,
+    normalize_memory,
+    register_server,
+    resolve_server_jar,
+)
 
 
 def test_build_java_command_keeps_arguments_separate():
@@ -13,16 +18,68 @@ def test_build_java_command_keeps_arguments_separate():
     ]
 
 
-@pytest.mark.parametrize("memory", ["", "0G", "2GB", "-1G", "$(id)"])
+def test_build_java_command_supports_separate_initial_and_maximum_memory():
+    command = build_java_command("6G", "server.jar", "", "2G")
+
+    assert command[:3] == ["java", "-Xms2G", "-Xmx6G"]
+
+
+def test_build_java_command_rejects_initial_memory_above_maximum():
+    with pytest.raises(ValueError, match="Initial memory"):
+        build_java_command("2G", "server.jar", "", "4G")
+
+
+@pytest.mark.parametrize("memory", ["", "0G", "2GBXX", "-1G", "$(id)"])
 def test_build_java_command_rejects_invalid_memory(memory):
-    with pytest.raises(ValueError, match="Memory"):
+    with pytest.raises(ValueError, match="Maximum RAM"):
         build_java_command(memory)
 
 
-@pytest.mark.parametrize("jar_name", ["../paper.jar", "/tmp/paper.jar", "paper.txt"])
+@pytest.mark.parametrize("jar_name", ["../paper.jar", "..\\paper.jar", "/tmp/paper.jar", "paper.txt"])
 def test_build_java_command_rejects_unsafe_jar_name(jar_name):
-    with pytest.raises(ValueError, match="JAR name"):
+    with pytest.raises(ValueError, match="JAR filename"):
         build_java_command(jar_name=jar_name)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("4GB", "4G"), ("2048mb", "2048M"), ("512 KB", "512K")],
+)
+def test_memory_units_are_normalized(value, expected):
+    assert normalize_memory(value) == expected
+
+
+def test_server_jar_must_be_a_regular_file_inside_server_directory(tmp_path):
+    server_directory = tmp_path / "server"
+    server_directory.mkdir()
+    jar = server_directory / "paper.jar"
+    jar.write_bytes(b"jar")
+
+    assert resolve_server_jar(server_directory, "paper.jar") == jar
+    with pytest.raises(ValueError, match="existing JAR"):
+        resolve_server_jar(server_directory, "missing.jar")
+    with pytest.raises(ValueError, match="existing JAR"):
+        resolve_server_jar(server_directory, "../../secret.jar")
+
+
+def test_server_jar_rejects_symlink_to_external_file(tmp_path):
+    server_directory = tmp_path / "server"
+    server_directory.mkdir()
+    external = tmp_path / "secret.jar"
+    external.write_bytes(b"secret")
+    (server_directory / "paper.jar").symlink_to(external)
+
+    with pytest.raises(ValueError, match="existing JAR"):
+        resolve_server_jar(server_directory, "paper.jar")
+
+
+@pytest.mark.parametrize(
+    "java_args",
+    ["-Xmx8G", "-jar other.jar", "@/etc/java.args", "-Dconfig=../../secret"],
+)
+def test_java_options_cannot_override_managed_values_or_reference_paths(java_args):
+    with pytest.raises(ValueError, match="cannot override memory"):
+        build_java_command("4G", "paper.jar", java_args)
 
 
 def test_register_server_rejects_unsafe_systemd_instance():

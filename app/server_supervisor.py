@@ -8,18 +8,17 @@ import subprocess
 import threading
 from pathlib import Path
 
-from .processes import build_java_command
+from .processes import build_java_command, resolve_server_jar
 
 
-def supervise(directory: str, socket_path: str, memory: str, jar_name: str, java_args: str) -> int:
+def supervise(directory: str, socket_path: str, memory: str, min_memory: str, jar_name: str, java_args: str) -> int:
     root = Path(directory).resolve()
-    if not (root / jar_name).is_file():
-        raise RuntimeError(f"{jar_name} does not exist")
+    resolve_server_jar(root, jar_name)
     endpoint = Path(socket_path)
     endpoint.parent.mkdir(parents=True, exist_ok=True)
     endpoint.unlink(missing_ok=True)
     process = subprocess.Popen(
-        build_java_command(memory, jar_name, java_args),
+        build_java_command(memory, jar_name, java_args, min_memory),
         cwd=root,
         stdin=subprocess.PIPE,
     )
@@ -70,6 +69,7 @@ def main() -> None:
     parser.add_argument("--directory")
     parser.add_argument("--socket")
     parser.add_argument("--memory", default="2G")
+    parser.add_argument("--min-memory", default="2G")
     parser.add_argument("--jar", default="paper.jar")
     parser.add_argument("--java-args", default="")
     options = parser.parse_args()
@@ -86,6 +86,7 @@ def main() -> None:
                 parser.error("systemd server configuration not found")
             options.directory = server.directory
             options.memory = server.memory
+            options.min_memory = server.min_memory
             options.jar = server.jar_name
             options.java_args = server.java_args
             options.socket = str(SYSTEMD_SOCKET_DIR / f"{server.service_name}.sock")
@@ -93,7 +94,7 @@ def main() -> None:
             db.close()
     if not options.directory or not options.socket:
         parser.error("directory and socket are required")
-    raise SystemExit(supervise(options.directory, options.socket, options.memory, options.jar, options.java_args))
+    raise SystemExit(supervise(options.directory, options.socket, options.memory, options.min_memory, options.jar, options.java_args))
 
 
 if __name__ == "__main__":

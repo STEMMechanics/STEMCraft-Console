@@ -1,6 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from .processes import normalize_memory
 
 
 ProcessBackend = Literal["subprocess", "systemd"]
@@ -65,7 +67,8 @@ class ServerCreate(BaseModel):
 
     paper_build: str | None = None
 
-    memory: str = Field(default="2G", pattern=r"^[1-9][0-9]*[KMGkmg]$")
+    memory: str = "2G"
+    min_memory: str | None = None
     jar_name: str = Field(default="paper.jar", pattern=r"^[^/\\]+\.jar$")
     java_args: str = Field(default="", max_length=1000)
     process_backend: ProcessBackend = "systemd"
@@ -75,6 +78,17 @@ class ServerCreate(BaseModel):
         ge=1,
         le=65535,
     )
+
+    @model_validator(mode="after")
+    def default_initial_memory(self):
+        if self.min_memory is None:
+            self.min_memory = self.memory
+        return self
+
+    @field_validator("memory", "min_memory", mode="before")
+    @classmethod
+    def normalize_memory_units(cls, value):
+        return None if value is None else normalize_memory(value)
 
 
 class ServerUpdate(BaseModel):
@@ -88,7 +102,8 @@ class ServerUpdate(BaseModel):
 
     paper_build: str | None = None
 
-    memory: str | None = Field(default=None, pattern=r"^[1-9][0-9]*[KMGkmg]$")
+    memory: str | None = None
+    min_memory: str | None = None
     jar_name: str | None = Field(default=None, pattern=r"^[^/\\]+\.jar$")
     java_args: str | None = Field(default=None, max_length=1000)
     process_backend: ProcessBackend | None = None
@@ -100,6 +115,11 @@ class ServerUpdate(BaseModel):
     )
 
     enabled: bool | None = None
+
+    @field_validator("memory", "min_memory", mode="before")
+    @classmethod
+    def normalize_memory_units(cls, value):
+        return None if value is None else normalize_memory(value)
 
 
 class ServerOut(BaseModel):
@@ -116,6 +136,7 @@ class ServerOut(BaseModel):
     paper_build: str | None
 
     memory: str
+    min_memory: str
     jar_name: str
     java_args: str
     process_backend: ProcessBackend
@@ -134,6 +155,11 @@ class PaperInstallRequest(BaseModel):
 
 class ServerStartRequest(BaseModel):
     memory: str = "2G"
+
+    @field_validator("memory", mode="before")
+    @classmethod
+    def normalize_memory_units(cls, value):
+        return normalize_memory(value)
 
 
 class ConsoleCommandRequest(BaseModel):

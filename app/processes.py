@@ -34,6 +34,7 @@ class ServerProcessConfig:
     memory: str
     jar_name: str
     java_args: str
+    min_memory: str = "2G"
 
 
 server_configs: dict[int, ServerProcessConfig] = {}
@@ -51,7 +52,7 @@ def register_server(server) -> None:
         raise ValueError("Invalid systemd service name")
     server_configs[server.id] = ServerProcessConfig(
         backend, service_name, server.directory, server.memory,
-        server.jar_name, server.java_args,
+        server.jar_name, server.java_args, server.min_memory,
     )
 
 
@@ -102,29 +103,93 @@ def _systemd_status(config: ServerProcessConfig) -> dict:
 MAX_CONSOLE_LINES = 1000
 
 
-MEMORY_PATTERN = re.compile(r"^[1-9][0-9]*[KMGkmg]$")
+MEMORY_PATTERN = re.compile(r"^([1-9][0-9]*)\s*(K|KB|M|MB|G|GB)$", re.IGNORECASE)
+
+
+def normalize_memory(value: str, label: str = "Memory") -> str:
+    match = MEMORY_PATTERN.fullmatch(str(value).strip())
+    if not match:
+        raise ValueError(
+            f"{label} must be a whole number followed by K, KB, M, MB, G, or GB (for example, 4GB)"
+        )
+    return f"{match.group(1)}{match.group(2)[0].upper()}"
+
+
+def resolve_server_jar(directory: str | Path, jar_name: str) -> Path:
+    jar = Path(jar_name)
+    if (
+        jar.name != jar_name
+        or jar.suffix.lower() != ".jar"
+        or jar.is_absolute()
+        or "/" in jar_name
+        or "\\" in jar_name
+    ):
+        raise ValueError("Select an existing JAR file from the server directory")
+
+    root = Path(directory).resolve()
+    candidate = root / jar_name
+    if candidate.is_symlink():
+        raise ValueError("Select an existing JAR file from the server directory")
+    try:
+        resolved = candidate.resolve(strict=True)
+        resolved.relative_to(root)
+    except (FileNotFoundError, RuntimeError, ValueError):
+        raise ValueError("Select an existing JAR file from the server directory") from None
+    if not resolved.is_file():
+        raise ValueError("Select an existing JAR file from the server directory")
+    return resolved
+
+
+def _validate_java_args(arguments: list[str]) -> None:
+    reserved = ("-xms", "-xmx", "-jar", "-cp", "-classpath", "--class-path")
+    for argument in arguments:
+        lowered = argument.lower()
+        if (
+            lowered.startswith(reserved)
+            or lowered.startswith("@")
+            or "/" in argument
+            or "\\" in argument
+            or ".." in argument
+            or re.match(r"^[a-zA-Z]:", argument)
+        ):
+            raise ValueError(
+                "Java startup options cannot override memory, the server JAR, or reference file paths"
+            )
 
 
 def build_java_command(
     memory: str = "2G",
     jar_name: str = "paper.jar",
     java_args: str = "",
+    min_memory: str | None = None,
 ) -> list[str]:
     """Build a shell-free Java command from validated server settings."""
-    if not MEMORY_PATTERN.fullmatch(memory):
-        raise ValueError("Memory must look like 2G or 1024M")
+    maximum_memory = normalize_memory(memory, "Maximum RAM")
+    initial_memory = normalize_memory(min_memory or memory, "Initial RAM")
+
+    multipliers = {"K": 1, "M": 1024, "G": 1024 * 1024}
+    as_kib = lambda value: int(value[:-1]) * multipliers[value[-1]]
+    if as_kib(initial_memory) > as_kib(maximum_memory):
+        raise ValueError("Initial memory cannot be greater than maximum memory")
 
     jar = Path(jar_name)
-    if jar.name != jar_name or jar.suffix.lower() != ".jar":
-        raise ValueError("JAR name must be a .jar file in the server directory")
+    if (
+        jar.name != jar_name
+        or jar.suffix.lower() != ".jar"
+        or jar.is_absolute()
+        or "/" in jar_name
+        or "\\" in jar_name
+    ):
+        raise ValueError("Select a JAR filename from the server directory")
 
     try:
         extra_args = shlex.split(java_args)
     except ValueError as error:
         raise ValueError("Invalid Java startup options") from error
+    _validate_java_args(extra_args)
 
     return [
-        "java", f"-Xms{memory}", f"-Xmx{memory}",
+        "java", f"-Xms{initial_memory}", f"-Xmx{maximum_memory}",
         *extra_args, "-jar", jar_name, "--nogui",
     ]
 
@@ -173,6 +238,7 @@ def start_server(
     memory: str = "2G",
     jar_name: str = "paper.jar",
     java_args: str = "",
+    min_memory: str | None = None,
 ):
     config = _systemd_config(server_id)
     if config:
@@ -196,13 +262,11 @@ def start_server(
         directory
     )
 
-    command = build_java_command(memory, jar_name, java_args)
-    jar = directory_path / jar_name
-
-    if not jar.exists():
-        raise RuntimeError(
-            f"{jar_name} does not exist"
-        )
+    command = build_java_command(memory, jar_name, java_args, min_memory)
+    try:
+        resolve_server_jar(directory_path, jar_name)
+    except ValueError as error:
+        raise RuntimeError(str(error)) from error
 
     console_buffers[server_id] = deque(
         maxlen=MAX_CONSOLE_LINES
@@ -302,6 +366,7 @@ def restart_server(
     memory: str = "2G",
     jar_name: str = "paper.jar",
     java_args: str = "",
+    min_memory: str | None = None,
 ):
     config = _systemd_config(server_id)
     if config:
@@ -338,6 +403,7 @@ def restart_server(
         memory,
         jar_name,
         java_args,
+        min_memory,
     )
 
 
