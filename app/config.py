@@ -1,6 +1,9 @@
 import os
 import secrets
 import warnings
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 def _session_secret() -> str:
@@ -30,3 +33,41 @@ COOKIE_SECURE = os.getenv(
 MAX_UPLOAD_BYTES = int(
     os.getenv("STEMCRAFT_CONSOLE_MAX_UPLOAD_BYTES", str(512 * 1024 * 1024))
 )
+
+
+def _system_timezone_name() -> str | None:
+    """Best-effort IANA name discovery on Linux and macOS."""
+    for path in (Path("/etc/localtime"), Path("/var/db/timezone/localtime")):
+        try:
+            targets = (str(path.readlink()), str(path.resolve()))
+            for target in targets:
+                for marker in ("zoneinfo.default/", "zoneinfo/"):
+                    if marker in target:
+                        return target.split(marker, 1)[1]
+        except OSError:
+            pass
+    try:
+        name = Path("/etc/timezone").read_text(encoding="utf-8").strip()
+        return name or None
+    except OSError:
+        return None
+
+
+def _schedule_timezone():
+    configured = os.getenv("STEMCRAFT_TIMEZONE", "").strip()
+    system_name = _system_timezone_name()
+    for name in filter(None, (configured, system_name)):
+        try:
+            return ZoneInfo(name), name
+        except ZoneInfoNotFoundError:
+            if name == configured:
+                warnings.warn(
+                    f"Unknown STEMCRAFT_TIMEZONE {name!r}; using the system timezone",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+    system_zone = datetime.now().astimezone().tzinfo
+    return system_zone, datetime.now().astimezone().tzname() or "System time"
+
+
+SCHEDULE_TIMEZONE, SCHEDULE_TIMEZONE_NAME = _schedule_timezone()

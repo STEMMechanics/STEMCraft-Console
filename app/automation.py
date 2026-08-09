@@ -3,7 +3,8 @@
 import os
 import threading
 import logging
-from datetime import datetime, timedelta
+from calendar import monthrange
+from datetime import datetime, timedelta, timezone
 
 import psutil
 
@@ -13,6 +14,7 @@ from .database import SessionLocal
 from .models import BackupJob, ScheduledTask, Server, ServerMetric, TaskRun
 from .player_manager import get_online_players
 from .processes import register_server, send_command, server_process_stats, server_status
+from .config import SCHEDULE_TIMEZONE
 
 
 _stop = threading.Event()
@@ -23,11 +25,107 @@ METRIC_SECONDS = max(15, int(os.getenv("STEMCRAFT_METRIC_INTERVAL_SECONDS", "60"
 METRIC_RETENTION_DAYS = max(1, int(os.getenv("STEMCRAFT_METRIC_RETENTION_DAYS", "30")))
 
 
+def next_task_run(task, now: datetime, schedule_timezone=None) -> datetime:
+    """Return the next naive UTC run in the configured local timezone."""
+    if task.frequency == "hourly":
+        return now.replace(second=0, microsecond=0) + timedelta(hours=1)
+    if task.frequency == "custom":
+        return next_cron_run(task.cron_expression, now, schedule_timezone)
+    if task.frequency in {"daily", "weekly", "monthly"}:
+        local_zone = schedule_timezone or SCHEDULE_TIMEZONE
+        local_now = now.replace(tzinfo=timezone.utc).astimezone(local_zone)
+        candidate = local_now.replace(
+            hour=task.run_hour or 0, minute=0, second=0, microsecond=0,
+        )
+        if task.frequency == "weekly":
+            candidate += timedelta(days=((task.run_weekday or 0) - candidate.weekday()) % 7)
+        elif task.frequency == "monthly":
+            candidate = candidate.replace(day=1)
+        if candidate <= local_now:
+            if task.frequency == "weekly":
+                candidate += timedelta(days=7)
+            elif task.frequency == "monthly":
+                candidate = (candidate.replace(day=28) + timedelta(days=4)).replace(day=1)
+            else:
+                candidate += timedelta(days=1)
+        return candidate.astimezone(timezone.utc).replace(tzinfo=None)
+    return now + timedelta(minutes=task.interval_minutes)
+
+
+def _cron_values(field: str, minimum: int, maximum: int, allow_sunday_7=False) -> set[int]:
+    values = set()
+    for part in field.split(","):
+        part = part.strip()
+        if not part:
+            raise ValueError("Empty schedule value")
+        step = 1
+        if "/" in part:
+            part, raw_step = part.split("/", 1)
+            step = int(raw_step)
+            if step < 1:
+                raise ValueError("Schedule step must be positive")
+        if part == "*":
+            start, end = minimum, maximum
+        elif "-" in part:
+            start, end = map(int, part.split("-", 1))
+        else:
+            start = end = int(part)
+        permitted_max = 7 if allow_sunday_7 else maximum
+        if start < minimum or end > permitted_max or start > end:
+            raise ValueError("Schedule value is out of range")
+        values.update(range(start, end + 1, step))
+    if allow_sunday_7 and 7 in values:
+        values.remove(7)
+        values.add(0)
+    return values
+
+
+def validate_cron_expression(expression: str) -> tuple[set[int], ...]:
+    fields = expression.split()
+    if len(fields) != 5:
+        raise ValueError("A custom schedule needs five fields")
+    return (
+        _cron_values(fields[0], 0, 59),
+        _cron_values(fields[1], 0, 23),
+        _cron_values(fields[2], 1, 31),
+        _cron_values(fields[3], 1, 12),
+        _cron_values(fields[4], 0, 6, allow_sunday_7=True),
+    )
+
+
+def next_cron_run(expression: str, now: datetime, schedule_timezone=None) -> datetime:
+    minutes, hours, month_days, months, week_days = validate_cron_expression(expression or "")
+    zone = schedule_timezone or SCHEDULE_TIMEZONE
+    local_now = now.replace(tzinfo=timezone.utc).astimezone(zone)
+    start_date = local_now.date()
+    fields = expression.split()
+    dom_any, dow_any = fields[2] == "*", fields[4] == "*"
+    for offset in range(366 * 5):
+        day = start_date + timedelta(days=offset)
+        if day.month not in months or day.day > monthrange(day.year, day.month)[1]:
+            continue
+        cron_weekday = (day.weekday() + 1) % 7
+        dom_match, dow_match = day.day in month_days, cron_weekday in week_days
+        if not ((dom_match and dow_match) if dom_any or dow_any else (dom_match or dow_match)):
+            continue
+        for hour in sorted(hours):
+            for minute in sorted(minutes):
+                candidate = datetime(day.year, day.month, day.day, hour, minute, tzinfo=zone)
+                if candidate > local_now:
+                    return candidate.astimezone(timezone.utc).replace(tzinfo=None)
+    raise ValueError("Custom schedule has no run time in the next five years")
+
+
 def enforce_backup_retention(server, keep: int | None) -> None:
     if not keep or keep < 1:
         return
     for backup in list_backups(server)[keep:]:
         delete_backup(server, backup["filename"])
+
+
+def can_execute_task(task, server_id: int) -> bool:
+    """Commands wait for a running server; backups may run while stopped."""
+    return task.task_type != "command" or bool(server_status(server_id).get("running"))
 
 
 def execute_task(task_id: int) -> None:
@@ -43,7 +141,12 @@ def execute_task(task_id: int) -> None:
         register_server(server)
         now = datetime.utcnow()
         task.last_run_at = now
-        task.next_run_at = now + timedelta(minutes=task.interval_minutes)
+        task.next_run_at = next_task_run(task, now)
+        if not can_execute_task(task, server.id):
+            # Advance the schedule quietly. A command is only meaningful while
+            # the Minecraft process is running and should not create a failed run.
+            db.commit()
+            return
         run = TaskRun(
             task_id=task.id, server_id=server.id, task_type=task.task_type,
             status="running", started_at=now,

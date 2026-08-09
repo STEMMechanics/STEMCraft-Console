@@ -1,0 +1,7 @@
+<div class="schedule-when-fields">
+  <label><span>Schedule</span><select name="frequency" onchange="updateScheduleWhen(this)" required><option value="hourly">Hourly — at the start of each hour</option><option value="daily">Daily — at 00:00</option><option value="weekly">Weekly — Sunday at 00:00</option><option value="monthly">Monthly — first day at 00:00</option><option value="custom">Create custom schedule…</option></select></label>
+  <input type="hidden" name="run_hour" value="0">
+  <input type="hidden" name="run_weekday" value="6">
+  <input type="hidden" name="cron_expression" value="">
+  <div class="selected-schedule-summary">Times use {{ schedule_timezone }}.</div>
+</div>
