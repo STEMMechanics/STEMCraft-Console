@@ -427,6 +427,7 @@ document.body.addEventListener(
     updateBackupsPage();
     updatePropertiesPage();
     updateSMTPSettings();
+    loadOffsiteBackupSettings();
     updateTFASettings();
     updateBackupJobs();
     updateServerProcessStats();
@@ -4039,6 +4040,40 @@ async function sendSMTPTest() {
 
 updateSMTPSettings();
 
+async function loadOffsiteBackupSettings() {
+  const status = document.getElementById("offsite-settings-status");
+  if (!status) return;
+  try {
+    const response = await fetch("/api/web/settings/offsite-backups");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to inspect rclone");
+    status.textContent = data.available
+      ? `${data.remotes.length} remote${data.remotes.length === 1 ? "" : "s"} configured · ${data.config}`
+      : data.error;
+    const options = document.getElementById("offsite-settings-remotes");
+    options.innerHTML = (data.remotes || []).map((remote) => `<option value="${escapeHtml(remote)}:"></option>`).join("");
+  } catch (error) {
+    status.textContent = error.message;
+  }
+}
+
+async function testOffsiteBackupDestination() {
+  const input = document.getElementById("offsite-test-destination");
+  const destination = input?.value.trim();
+  const status = document.getElementById("offsite-test-status");
+  if (!destination) return alert("Enter a remote path first.");
+  status.textContent = "Testing...";
+  const response = await fetch("/api/web/settings/offsite-backups/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ destination }),
+  });
+  const data = await response.json();
+  status.textContent = response.ok ? "Connection successful." : (data.error || "Connection failed.");
+}
+
+loadOffsiteBackupSettings();
+
 async function updateTFASettings() {
   const disabled = document.getElementById(
     "tfa-disabled-controls",
@@ -5230,6 +5265,18 @@ async function loadServerSchedules() {
     const taskNames = new Map((data.tasks || []).map((task) => [Number(task.id), task.name]));
     const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     const timezone = page.dataset.timezone || "server time";
+    const remoteOptions = document.getElementById("rclone-remotes");
+    if (remoteOptions) {
+      remoteOptions.innerHTML = (data.offsite_remotes || []).map((remote) => `<option value="${escapeHtml(remote)}:"></option>`).join("");
+    }
+    const offsiteAvailability = document.getElementById("offsite-availability");
+    if (offsiteAvailability) {
+      offsiteAvailability.textContent = data.offsite_error
+        ? `Off-site copies unavailable: ${data.offsite_error}`
+        : (data.offsite_remotes || []).length
+          ? `Available remotes: ${data.offsite_remotes.join(", ")}`
+          : "No rclone remotes are configured.";
+    }
     const describeWhen = (task) => {
       if (task.frequency === "hourly") return "Every hour";
       const time = `${String(task.run_hour ?? 0).padStart(2, "0")}:00 ${timezone}`;
@@ -5247,7 +5294,11 @@ async function loadServerSchedules() {
       }</strong><br>
             <small>${
         task.task_type === "backup"
-          ? `Keep ${task.retention_count || "all"} backups`
+          ? `Keep ${task.retention_count || "all"} local backups${
+            task.remote_destination
+              ? ` · Copy to ${escapeHtml(task.remote_destination)} · Keep ${task.remote_retention_count || "all"} off-site`
+              : ""
+          }`
           : escapeHtml(task.command)
       } · ${describeWhen(task)}</small></div>
             <button class="button" onclick="deleteServerSchedule(${

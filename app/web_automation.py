@@ -12,6 +12,7 @@ from .automation import next_task_run, validate_cron_expression
 from .web_context import build_web_context
 from .web_render import render_page
 from .config import SCHEDULE_TIMEZONE_NAME
+from .offsite_backups import OffsiteBackupError, configured_remotes, validate_destination
 
 
 router = APIRouter()
@@ -24,6 +25,8 @@ def _task_json(task):
         "frequency": task.frequency, "run_hour": task.run_hour,
         "run_weekday": task.run_weekday,
         "cron_expression": task.cron_expression,
+        "remote_destination": task.remote_destination,
+        "remote_retention_count": task.remote_retention_count,
         "retention_count": task.retention_count, "enabled": task.enabled,
         "next_run_at": task.next_run_at.isoformat(),
         "last_run_at": task.last_run_at.isoformat() if task.last_run_at else None,
@@ -64,6 +67,10 @@ def schedules(server_id: int, request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "Access denied"}, status_code=403)
     tasks = db.query(ScheduledTask).filter(ScheduledTask.server_id == server.id).order_by(ScheduledTask.name).all()
     runs = db.query(TaskRun).filter(TaskRun.server_id == server.id).order_by(TaskRun.id.desc()).limit(50).all()
+    try:
+        remotes, remote_error = configured_remotes(), None
+    except OffsiteBackupError as error:
+        remotes, remote_error = [], str(error)
     return {
         "tasks": [_task_json(task) for task in tasks],
         "runs": [{
@@ -72,6 +79,8 @@ def schedules(server_id: int, request: Request, db: Session = Depends(get_db)):
             "started_at": run.started_at.isoformat(),
             "finished_at": run.finished_at.isoformat() if run.finished_at else None,
         } for run in runs],
+        "offsite_remotes": remotes,
+        "offsite_error": remote_error,
     }
 
 
@@ -93,6 +102,7 @@ async def create_schedule(server_id: int, request: Request, db: Session = Depend
         retention = int(data["retention_count"]) if data.get("retention_count") else None
         run_hour = int(data["run_hour"]) if data.get("run_hour") not in (None, "") else None
         run_weekday = int(data["run_weekday"]) if data.get("run_weekday") not in (None, "") else None
+        remote_retention = int(data["remote_retention_count"]) if data.get("remote_retention_count") else None
     except (TypeError, ValueError):
         return JSONResponse({"error": "Invalid interval or retention"}, status_code=400)
     if frequency in {"hourly", "daily", "weekly", "monthly", "custom"}:
@@ -118,11 +128,21 @@ async def create_schedule(server_id: int, request: Request, db: Session = Depend
         return JSONResponse({"error": "Retention must be between 1 and 10000"}, status_code=400)
     if command and (len(command) > 500 or "\n" in command or "\r" in command):
         return JSONResponse({"error": "Invalid command"}, status_code=400)
+    remote_destination = str(data.get("remote_destination", "")).strip() or None
+    if task_type == "backup" and remote_destination:
+        try:
+            remote_destination = validate_destination(remote_destination)
+        except OffsiteBackupError as error:
+            return JSONResponse({"error": str(error)}, status_code=400)
+        if remote_retention is not None and not 1 <= remote_retention <= 10000:
+            return JSONResponse({"error": "Off-site retention must be between 1 and 10000"}, status_code=400)
     task = ScheduledTask(
         server_id=server.id, task_type=task_type, name=name[:100], command=command,
         interval_minutes=interval, retention_count=retention, enabled=True,
         frequency=frequency, run_hour=run_hour, run_weekday=run_weekday,
         cron_expression=cron_expression,
+        remote_destination=remote_destination,
+        remote_retention_count=remote_retention if remote_destination else None,
         next_run_at=datetime.utcnow() + timedelta(minutes=interval),
     )
     task.next_run_at = next_task_run(task, datetime.utcnow())

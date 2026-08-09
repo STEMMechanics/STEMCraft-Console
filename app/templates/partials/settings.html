@@ -201,6 +201,27 @@
 
     {% if user.can("settings.manage") %}
     <section class="overview-card settings-section">
+        <div class="card-header">Off-site Backups</div>
+        <div class="settings-content">
+            <div class="settings-info-row full-width">
+                <span>rclone status</span>
+                <strong id="offsite-settings-status">Checking...</strong>
+            </div>
+            <label class="property-field full-width">
+                <span>Test remote path</span>
+                <input id="offsite-test-destination" list="offsite-settings-remotes" placeholder="b2:bucket/minecraft-backups">
+                <small>Configure credentials with rclone on the console server. Secrets remain in its restricted configuration file.</small>
+                <datalist id="offsite-settings-remotes"></datalist>
+            </label>
+            <div class="settings-save-row">
+                <span id="offsite-test-status" class="muted-small"></span>
+                <button class="button" type="button" onclick="loadOffsiteBackupSettings()">Refresh</button>
+                <button class="button" type="button" onclick="testOffsiteBackupDestination()">Test connection</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="overview-card settings-section">
 
         <div class="card-header">
             Email / SMTP

@@ -3147,6 +3147,26 @@ input[type="checkbox"] {
   font-weight: 600;
 }
 
+.friendly-schedule-form label > small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.offsite-schedule-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr);
+  gap: 14px;
+  padding: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  background: #fafbfc;
+}
+
+.offsite-schedule-fields #offsite-availability {
+  grid-column: 1 / -1;
+}
+
 .schedule-when-fields {
   display: grid;
   gap: 10px;
@@ -3599,7 +3619,8 @@ input[type="checkbox"] {
   }
 
   .schedule-when-fields,
-  .custom-schedule-grid {
+  .custom-schedule-grid,
+  .offsite-schedule-fields {
     grid-template-columns: 1fr;
   }
 }
