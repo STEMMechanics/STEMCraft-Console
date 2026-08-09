@@ -4472,11 +4472,10 @@ function populatePaperBuilds(builds, installedBuild = null) {
 }
 
 function openDeleteServerModal() {
-  document.getElementById("delete-server-confirmation").value = "";
   document.getElementById("delete-server-files").checked = false;
   document.getElementById("delete-server-error").textContent = "";
   document.getElementById("delete-server-modal").hidden = false;
-  document.getElementById("delete-server-confirmation").focus();
+  document.getElementById("confirm-delete-server").focus();
 }
 
 function closeDeleteServerModal() {
@@ -4495,7 +4494,7 @@ async function confirmDeleteServer() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        confirmation: document.getElementById("delete-server-confirmation").value,
+        confirmed: true,
         delete_files: document.getElementById("delete-server-files").checked,
       }),
     });

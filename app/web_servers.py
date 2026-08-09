@@ -114,9 +114,9 @@ async def web_delete_server(
         return JSONResponse({"error": "Server not found"}, status_code=404)
 
     data = await request.json()
-    if data.get("confirmation") != server.name:
+    if data.get("confirmed") is not True:
         return JSONResponse(
-            {"error": "Enter the server name exactly to confirm deletion"},
+            {"error": "Confirm the server deletion"},
             status_code=400,
         )
 
