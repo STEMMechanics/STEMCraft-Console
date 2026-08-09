@@ -1,5 +1,9 @@
 <div class="topbar" data-server-id="{{ active_server.id if active_server else '' }}">
 
+    <button class="mobile-menu-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" onclick="toggleMobileSidebar()">
+        <i class="fa-solid fa-bars"></i>
+    </button>
+
     <h1 id="topbar-title">
         {{ page_title or "Overview" }}
     </h1>

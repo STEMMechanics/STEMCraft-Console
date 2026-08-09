@@ -73,7 +73,8 @@ from .automation import start_automation, stop_automation
 
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from .system_operation import current_operation
 
 from .web import router as web_router
 
@@ -101,6 +102,20 @@ async def security_headers(request, call_next):
         "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
     )
     return response
+
+
+@app.middleware("http")
+async def system_operation_lock(request, call_next):
+    operation = current_operation()
+    if operation and request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+        return JSONResponse(
+            {
+                "error": "A system update or restart is in progress",
+                "operation": operation,
+            },
+            status_code=423,
+        )
+    return await call_next(request)
 
 app.mount(
     "/static",
