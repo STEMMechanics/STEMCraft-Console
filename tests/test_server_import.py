@@ -42,6 +42,8 @@ def test_inspection_reports_missing_required_files(tmp_path, monkeypatch):
     result = server_import.inspect_server_directory(directory)
 
     assert result["ready"] is False
+    assert result["jar_name"] is None
+    assert result["port"] is None
     assert "server.properties was not found" in result["errors"]
     assert "No server JAR was found in the directory" in result["errors"]
 
@@ -100,15 +102,17 @@ def test_relative_import_path_is_rejected():
 
 
 def test_import_page_is_not_captured_by_server_id_route():
+    routes = web_servers_router.routes
     detail = next(
-        route for route in web_servers_router.routes
+        route for route in routes
         if route.path == "/servers/{server_id:int}"
     )
     importer = next(
-        route for route in web_servers_router.routes
+        route for route in routes
         if route.path == "/servers/import"
     )
     scope = {"type": "http", "method": "GET", "path": "/servers/import"}
 
+    assert routes.index(importer) < routes.index(detail)
     assert detail.matches(scope)[0] is Match.NONE
     assert importer.matches(scope)[0] is Match.FULL
