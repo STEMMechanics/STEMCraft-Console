@@ -1,12 +1,11 @@
-<div class="server-import-page" data-page-title="Import Server">
+<div class="settings-page server-import-page" data-page-title="Import Server">
+  {% if detected_servers %}
   <section class="overview-card settings-section">
     <div class="card-header">
       <span>Detected Servers</span>
-      <small class="muted-small">Scanning {{ server_root }}</small>
     </div>
     <div class="settings-content import-detected-list">
-      {% if detected_servers %}
-        {% for detected in detected_servers %}
+      {% for detected in detected_servers %}
         <form class="import-server-card" method="post" action="/servers/import">
           <div class="import-server-heading">
             <div>
@@ -27,33 +26,39 @@
           {% for warning in detected.warnings %}<p class="import-check warning"><i class="fa-solid fa-triangle-exclamation"></i> {{ warning }}</p>{% endfor %}
           <input type="hidden" name="directory" value="{{ detected.directory }}">
           <div class="import-server-fields">
-            <label class="property-field"><span>Panel name</span><input name="name" value="{{ detected.name }}" required></label>
+            <label class="property-field"><span>Server name</span><input name="name" value="{{ detected.name }}" required></label>
             <label class="property-field"><span>Memory</span><select name="memory"><option>2G</option><option selected>4G</option><option>8G</option><option>16G</option></select></label>
             <input type="hidden" name="process_backend" value="systemd">
             <button class="button start" type="submit" {% if not detected.ready %}disabled{% endif %}>Import Server</button>
           </div>
         </form>
-        {% endfor %}
-      {% else %}
-        <div class="empty-message">No unmanaged Minecraft server directories were detected under {{ server_root }}.</div>
-      {% endif %}
+      {% endfor %}
     </div>
   </section>
+  {% endif %}
 
   <section class="overview-card settings-section">
     <div class="card-header"><span>Import by Path</span></div>
     <form id="import-server-form" class="settings-content import-server-form" method="post" action="/servers/import">
-      <label class="property-field full-width"><span>Server directory</span><input id="import-server-directory" name="directory" placeholder="/opt/minecraft" oninput="resetImportInspection()" required></label>
-      <label class="property-field"><span>Panel name</span><input id="import-server-name" name="name" required></label>
+      <label class="property-field full-width"><span>Server directory</span><input id="import-server-directory" name="directory" placeholder="/opt/minecraft" required></label>
+      <label class="property-field"><span>Server name</span><input id="import-server-name" name="name" required></label>
       <label class="property-field"><span>Memory</span><select name="memory"><option>2G</option><option selected>4G</option><option>8G</option><option>16G</option></select></label>
-      <label class="property-field"><span>Process backend</span><select id="import-process-backend" name="process_backend" onchange="resetImportInspection()"><option value="systemd" selected>Production (systemd)</option><option value="subprocess">Development (panel-owned)</option></select></label>
+      <label class="property-field"><span>Process backend</span><select id="import-process-backend" name="process_backend"><option value="systemd" selected>Production (systemd)</option><option value="subprocess">Development (panel-owned)</option></select></label>
       <div class="import-server-actions">
-        <button class="button" type="button" onclick="inspectImportServer()">Inspect Path</button>
-        <button id="import-server-submit" class="button start" type="submit" disabled>Import Server</button>
-      </div>
-      <div id="import-inspection-report" class="import-inspection-report muted-small">
-        Inspect the path first. STEMCraft will check the JAR, properties, EULA, port, external services, and effective filesystem permissions.
+        <button id="import-server-submit" class="button start" type="button" onclick="reviewServerImport()">Import Server</button>
       </div>
     </form>
   </section>
+
+  <div id="import-review-modal" class="modal-backdrop" hidden>
+    <div class="modal-card import-review-modal">
+      <h2 id="import-review-title">Review server import</h2>
+      <p id="import-review-summary">Checking the server directory and management requirements…</p>
+      <div id="import-inspection-report" class="import-inspection-report muted-small"></div>
+      <div class="modal-actions">
+        <button class="button" type="button" onclick="closeImportReviewModal()">Cancel</button>
+        <button id="confirm-import-server" class="button start" type="button" onclick="confirmServerImport()" hidden>Confirm Import</button>
+      </div>
+    </div>
+  </div>
 </div>

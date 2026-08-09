@@ -114,9 +114,9 @@ async def web_delete_server(
         return JSONResponse({"error": "Server not found"}, status_code=404)
 
     data = await request.json()
-    if data.get("confirmation") != server.name:
+    if data.get("confirmed") is not True:
         return JSONResponse(
-            {"error": "Enter the server name exactly to confirm deletion"},
+            {"error": "Confirm the server deletion"},
             status_code=400,
         )
 
@@ -741,6 +741,71 @@ def create_server_web(
 
 
 # -------------------------------------------------------------------
+# Import existing server
+#
+# Keep this static route above /servers/{server_id} so "import" can never
+# be interpreted as a server identifier by the router.
+# -------------------------------------------------------------------
+
+@router.get(
+    "/servers/import",
+    response_class=HTMLResponse,
+)
+def import_servers_page(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = current_web_user(
+        request,
+        db,
+    )
+
+    if not user:
+        return RedirectResponse(
+            "/login"
+        )
+
+    if user.role != "admin":
+        return RedirectResponse(
+            "/dashboard"
+        )
+
+    existing_dirs = {
+        str(
+            Path(
+                server.directory
+            ).resolve()
+        )
+        for server
+        in db.query(Server).all()
+    }
+
+    detected = detect_server_directories(SERVER_ROOT, existing_dirs)
+
+    context = build_web_context(
+        db,
+        user,
+    )
+
+    context.update({
+        "detected_servers":
+            detected,
+
+        "page_title":
+            "Import Server",
+
+        "server_root": str(SERVER_ROOT),
+    })
+
+    return render_page(
+        request,
+        "server_import.html",
+        "partials/server_import.html",
+        context,
+    )
+
+
+# -------------------------------------------------------------------
 # Server overview
 # -------------------------------------------------------------------
 
@@ -1306,71 +1371,6 @@ def console_page(
         request,
         "console.html",
         "partials/console.html",
-        context,
-    )
-
-
-# -------------------------------------------------------------------
-# Import existing server
-# -------------------------------------------------------------------
-
-@router.get(
-    "/servers/import",
-    response_class=HTMLResponse,
-)
-def import_servers_page(
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    user = current_web_user(
-        request,
-        db,
-    )
-
-    if not user:
-        return RedirectResponse(
-            "/login"
-        )
-
-    if user.role != "admin":
-        return RedirectResponse(
-            "/dashboard"
-        )
-
-
-    existing_dirs = {
-        str(
-            Path(
-                server.directory
-            ).resolve()
-        )
-        for server
-        in db.query(Server).all()
-    }
-
-    detected = detect_server_directories(SERVER_ROOT, existing_dirs)
-
-
-    context = build_web_context(
-        db,
-        user,
-    )
-
-    context.update({
-        "detected_servers":
-            detected,
-
-        "page_title":
-            "Import Server",
-
-        "server_root": str(SERVER_ROOT),
-    })
-
-
-    return render_page(
-        request,
-        "server_import.html",
-        "partials/server_import.html",
         context,
     )
 

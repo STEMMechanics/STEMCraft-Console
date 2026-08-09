@@ -1,4 +1,5 @@
 import shutil
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -22,7 +23,22 @@ def delete_managed_server(
 ) -> dict:
     processes.register_server(server)
     if processes.server_status(server.id).get("running"):
-        raise ValueError("Stop the server before deleting it")
+        try:
+            processes.stop_server(server.id)
+        except RuntimeError as error:
+            raise ValueError(f"Unable to stop the server: {error}") from error
+
+        process = processes.processes.get(server.id)
+        if process and process.poll() is None:
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired as error:
+                raise ValueError(
+                    "The server did not stop within 30 seconds; deletion was cancelled"
+                ) from error
+
+        if processes.server_status(server.id).get("running"):
+            raise ValueError("The server is still running; deletion was cancelled")
 
     server_path = Path(server.directory)
     staged_path = None
