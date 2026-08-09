@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import urllib.request
+import zipfile
 
 from pathlib import Path
 
@@ -20,6 +21,43 @@ USER_AGENT = (
     f"STEMCraft-Console/{APP_VERSION} "
     "(https://github.com/stemmechanics/stemcraft-console)"
 )
+
+
+def inspect_paper_jar(path: str | Path) -> dict:
+    """Read a Paperclip JAR's embedded Minecraft version and checksum."""
+    jar_path = Path(path)
+    try:
+        with zipfile.ZipFile(jar_path) as archive:
+            version_data = json.loads(archive.read("version.json"))
+    except (OSError, KeyError, json.JSONDecodeError, zipfile.BadZipFile) as error:
+        raise ValueError("Unable to identify the installed Paper JAR") from error
+
+    version = str(version_data.get("id") or version_data.get("name") or "").strip()
+    if not version or not re.fullmatch(r"[0-9A-Za-z._+-]+", version):
+        raise ValueError("Unable to identify the installed Paper version")
+
+    digest = hashlib.sha256()
+    try:
+        with jar_path.open("rb") as jar_file:
+            for chunk in iter(lambda: jar_file.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as error:
+        raise ValueError("Unable to read the installed Paper JAR") from error
+
+    checksum = digest.hexdigest().lower()
+    return {"version": version, "sha256": digest.hexdigest().lower()}
+
+
+def match_paper_build(checksum: str, builds: list[dict]) -> str | None:
+    """Return the Paper build whose published checksum matches a JAR."""
+    checksum = checksum.lower()
+    for build in builds:
+        downloads = build.get("downloads", {})
+        for download in downloads.values() if isinstance(downloads, dict) else []:
+            checksums = download.get("checksums", {}) if isinstance(download, dict) else {}
+            if str(checksums.get("sha256", "")).lower() == checksum:
+                return str(build["id"])
+    return None
 
 
 def paper_request(

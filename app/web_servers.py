@@ -33,6 +33,8 @@ from .paper import (
     create_eula,
     create_server_properties,
     download_paper,
+    inspect_paper_jar,
+    match_paper_build,
     get_versions,
     get_latest_build,
     get_builds,
@@ -1514,6 +1516,22 @@ def web_paper_status(server_id: int, request: Request, version: str | None = Non
         return JSONResponse({"error": "Access denied"}, status_code=403)
     try:
         versions = get_versions()
+        detected = None
+        try:
+            detected = inspect_paper_jar(Path(server.directory) / server.jar_name)
+            detected_builds = get_builds(detected["version"])
+            detected["build"] = match_paper_build(detected["sha256"], detected_builds)
+            if (
+                detected["version"] != server.minecraft_version
+                or detected["build"] != server.paper_build
+            ):
+                server.minecraft_version = detected["version"]
+                server.paper_build = detected["build"]
+                db.commit()
+        except (ValueError, OSError):
+            # A custom or currently unavailable JAR should not prevent release
+            # information from loading; retain the last known metadata.
+            detected = None
         current_version = server.minecraft_version
         latest_version = versions[0] if versions else current_version
         selected_version = version or current_version
@@ -1534,6 +1552,7 @@ def web_paper_status(server_id: int, request: Request, version: str | None = Non
             "selected_version": selected_version,
             "builds": [{"id": str(build["id"]), "channel": build.get("channel", "") } for build in builds],
             "running": server_status(server.id).get("running", False),
+            "jar_inspected": detected is not None,
         }
     except Exception as error:
         return JSONResponse({"error": str(error)}, status_code=502)

@@ -8,7 +8,7 @@
         <div class="card-header"><span>Paper Server Version</span><span id="paper-version-detail" class="plugin-count">Checking releases...</span></div>
         <div class="paper-management-body">
             <div>
-                <strong class="paper-installed-version">Installed: Paper {{ server.minecraft_version or "Unknown" }}{% if server.paper_build %} <small>(build {{ server.paper_build }})</small>{% endif %}</strong>
+                <strong class="paper-installed-version">Installed: Paper <span id="paper-installed-version">{{ server.minecraft_version or "Unknown" }}{% if server.paper_build %} <small>(build {{ server.paper_build }})</small>{% endif %}</span></strong>
                 <p>Download the latest stable build, replace the configured server JAR, or change Minecraft versions. The server must be stopped.</p>
             </div>
             <label class="property-field"><span>Minecraft version</span><select id="paper-version-select" onchange="loadPaperBuilds(this.value)"><option>Loading versions...</option></select></label>

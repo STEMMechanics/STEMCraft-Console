@@ -5056,6 +5056,14 @@ async function loadPaperVersionStatus() {
     );
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unable to check Paper");
+    const installed = document.getElementById("paper-installed-version");
+    if (installed) {
+      installed.innerHTML = `${escapeHtml(data.current_version || "Unknown")}${
+        data.current_build
+          ? ` <small>(build ${escapeHtml(data.current_build)})</small>`
+          : ""
+      }`;
+    }
     const buildText = data.builds_behind === null
       ? "build status unknown"
       : data.builds_behind === 0
