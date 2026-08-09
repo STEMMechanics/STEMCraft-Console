@@ -3,7 +3,7 @@
     data-server-id="{{ server.id }}"
     data-page-title="Properties"
 >
-    {% if user.role == "admin" %}
+    {% if user.can("servers.properties") %}
     <section class="overview-card property-section paper-management" data-server-id="{{ server.id }}">
         <div class="card-header"><span>Paper Server Version</span><span id="paper-version-detail" class="plugin-count">Checking releases...</span></div>
         <div class="paper-management-body">
@@ -466,7 +466,7 @@
 
         <div class="properties-actions">
 
-            {% if user.role == "admin" %}
+            {% if user.can("servers.delete") %}
             <button class="button danger server-delete-button" type="button" onclick="openDeleteServerModal()">
                 Delete Server
             </button>
@@ -485,7 +485,7 @@
 
     </form>
 
-    {% if user.role == "admin" %}
+    {% if user.can("servers.delete") %}
     <div id="delete-server-modal" class="modal-backdrop" hidden>
         <div class="modal-card">
             <h2>Delete {{ server.name }}?</h2>

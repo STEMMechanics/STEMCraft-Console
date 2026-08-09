@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 
 from .auth import hash_password
 from .database import get_db
-from .models import Server, User
+from .models import AccessRole, Server, User
+from .permissions import PERMISSION_GROUPS, has_permission
 from .web_context import build_web_context
 from .web_render import render_page
 from .web_users import current_web_user
@@ -126,7 +127,7 @@ def settings_page(
             console_port,
     })
 
-    if user.role == "admin":
+    if has_permission(user, "users.manage"):
 
         context["users"] = (
             db.query(User)
@@ -137,6 +138,16 @@ def settings_page(
         context["servers"] = (
             db.query(Server)
             .order_by(Server.name)
+            .all()
+        )
+
+    if has_permission(user, "roles.manage"):
+        context["permission_groups"] = PERMISSION_GROUPS
+
+    if has_permission(user, "users.manage") or has_permission(user, "roles.manage"):
+        context["roles"] = (
+            db.query(AccessRole)
+            .order_by(AccessRole.name)
             .all()
         )
 
@@ -288,7 +299,7 @@ def get_user_settings(
             status_code=401,
         )
 
-    if admin.role != "admin":
+    if not has_permission(admin, "users.manage"):
         return JSONResponse(
             {"error": "Admin required"},
             status_code=403,
@@ -308,7 +319,9 @@ def get_user_settings(
     return {
         "id": user.id,
         "username": user.username,
-        "role": user.role,
+        "role_id": user.role_id,
+        "role": user.role_name,
+        "server_access_all": has_permission(user, "servers.view_all"),
         "enabled": user.enabled,
         "must_change_password":
             user.must_change_password,
@@ -338,7 +351,7 @@ async def create_user_settings(
             status_code=401,
         )
 
-    if admin.role != "admin":
+    if not has_permission(admin, "users.manage"):
         return JSONResponse(
             {"error": "Admin required"},
             status_code=403,
@@ -361,10 +374,14 @@ async def create_user_settings(
         )
     )
 
-    role = data.get(
-        "role",
-        "user",
-    )
+    try:
+        role_id = int(data.get("role_id"))
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "Select a role"}, status_code=400)
+
+    access_role = db.get(AccessRole, role_id)
+    if not access_role:
+        return JSONResponse({"error": "Invalid role"}, status_code=400)
 
     must_change_password = bool(
         data.get(
@@ -385,15 +402,6 @@ async def create_user_settings(
                 "error":
                     "Password must be at least 8 characters."
             },
-            status_code=400,
-        )
-
-    if role not in (
-        "admin",
-        "user",
-    ):
-        return JSONResponse(
-            {"error": "Invalid role"},
             status_code=400,
         )
 
@@ -419,7 +427,8 @@ async def create_user_settings(
         password_hash=hash_password(
             password
         ),
-        role=role,
+        role="admin" if access_role.name == "Administrator" else "user",
+        role_id=access_role.id,
         enabled=True,
         must_change_password=must_change_password,
     )
@@ -427,7 +436,7 @@ async def create_user_settings(
     db.add(user)
     db.flush()
 
-    if role == "user":
+    if not any(permission.key == "servers.view_all" for permission in access_role.permissions):
 
         server_ids = data.get(
             "servers",
@@ -473,7 +482,7 @@ async def update_user_settings(
             status_code=401,
         )
 
-    if admin.role != "admin":
+    if not has_permission(admin, "users.manage"):
         return JSONResponse(
             {"error": "Admin required"},
             status_code=403,
@@ -500,10 +509,14 @@ async def update_user_settings(
         .strip()
     )
 
-    role = data.get(
-        "role",
-        user.role,
-    )
+    try:
+        role_id = int(data.get("role_id", user.role_id))
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "Select a role"}, status_code=400)
+
+    access_role = db.get(AccessRole, role_id)
+    if not access_role:
+        return JSONResponse({"error": "Invalid role"}, status_code=400)
 
     enabled = bool(
         data.get(
@@ -519,23 +532,14 @@ async def update_user_settings(
         )
     )
 
-    if role not in (
-        "admin",
-        "user",
-    ):
-        return JSONResponse(
-            {"error": "Invalid role"},
-            status_code=400,
-        )
-
     if (
         user.id == admin.id
-        and role != "admin"
+        and role_id != user.role_id
     ):
         return JSONResponse(
             {
                 "error":
-                    "You cannot remove your own admin access."
+                    "You cannot change your own role."
             },
             status_code=400,
         )
@@ -559,7 +563,8 @@ async def update_user_settings(
         )
 
     user.username = username
-    user.role = role
+    user.role_id = access_role.id
+    user.role = "admin" if access_role.name == "Administrator" else "user"
     user.enabled = enabled
     user.must_change_password = (
         must_change_password
@@ -585,7 +590,7 @@ async def update_user_settings(
             password
         )
 
-    if role == "admin":
+    if any(permission.key == "servers.view_all" for permission in access_role.permissions):
 
         user.servers.clear()
 
@@ -640,7 +645,7 @@ def delete_user_settings(
             status_code=401,
         )
 
-    if admin.role != "admin":
+    if not has_permission(admin, "users.manage"):
         return JSONResponse(
             {"error": "Admin required"},
             status_code=403,
@@ -691,7 +696,7 @@ def get_smtp_settings_api(
             status_code=401,
         )
 
-    if admin.role != "admin":
+    if not has_permission(admin, "settings.manage"):
         return JSONResponse(
             {"error": "Admin required"},
             status_code=403,
@@ -726,7 +731,7 @@ async def save_smtp_settings_api(
             status_code=401,
         )
 
-    if admin.role != "admin":
+    if not has_permission(admin, "settings.manage"):
         return JSONResponse(
             {"error": "Admin required"},
             status_code=403,
@@ -811,7 +816,7 @@ async def test_smtp_settings(
             status_code=401,
         )
 
-    if admin.role != "admin":
+    if not has_permission(admin, "settings.manage"):
         return JSONResponse(
             {"error": "Admin required"},
             status_code=403,
@@ -1102,7 +1107,7 @@ def update_status(
             status_code=401,
         )
 
-    if user.role != "admin":
+    if not has_permission(user, "system.manage"):
         return JSONResponse(
             {"error": "Admin required"},
             status_code=403,
@@ -1131,7 +1136,7 @@ async def install_update(request: Request, db: Session = Depends(get_db)):
     user = current_web_user(request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if user.role != "admin":
+    if not has_permission(user, "system.manage"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
     data = await request.json()
     try:
@@ -1151,7 +1156,7 @@ def restart_console(request: Request, db: Session = Depends(get_db)):
     user = current_web_user(request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if user.role != "admin":
+    if not has_permission(user, "system.manage"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
     try:
         schedule_console_restart()

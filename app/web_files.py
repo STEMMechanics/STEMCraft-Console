@@ -44,6 +44,7 @@ from .web_render import (
 from .web_servers import (
     get_accessible_server,
 )
+from .permissions import has_permission
 
 
 router = APIRouter()
@@ -73,7 +74,7 @@ def files_page(
             "/login"
         )
 
-    if not server:
+    if not server or not has_permission(user, "files.view"):
         raise HTTPException(
             status_code=403,
             detail="Access denied",
@@ -148,7 +149,7 @@ async def upload_file(
             "/login"
         )
 
-    if not server:
+    if not server or not has_permission(user, "files.manage"):
         raise HTTPException(
             status_code=403,
             detail="Access denied",
@@ -232,7 +233,7 @@ def download_file(
             status_code=401
         )
 
-    if not server:
+    if not server or not has_permission(user, "files.view"):
         raise HTTPException(
             status_code=403
         )
@@ -281,7 +282,7 @@ def edit_file_page(
             "/login"
         )
 
-    if not server:
+    if not server or not has_permission(user, "files.manage"):
         raise HTTPException(
             status_code=403
         )
@@ -354,7 +355,7 @@ def save_file(
             "/login"
         )
 
-    if not server:
+    if not server or not has_permission(user, "files.manage"):
         raise HTTPException(
             status_code=403
         )
@@ -407,7 +408,7 @@ async def mkdir(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "files.manage"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -467,7 +468,7 @@ async def rename(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "files.manage"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -527,7 +528,7 @@ async def delete(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "files.manage"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -581,7 +582,7 @@ async def move(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "files.manage"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,

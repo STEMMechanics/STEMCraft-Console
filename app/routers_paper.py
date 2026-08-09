@@ -22,6 +22,7 @@ from .paper import (
 
 from .permissions import (
     get_server_for_user,
+    has_permission,
 )
 
 from .processes import (
@@ -50,6 +51,8 @@ def versions(
         get_current_user
     ),
 ):
+    if not has_permission(user, "servers.properties"):
+        raise HTTPException(status_code=403, detail="Server properties permission required")
     try:
         return {
             "versions": get_versions()
@@ -69,6 +72,8 @@ def java_status(
         get_current_user
     ),
 ):
+    if not has_permission(user, "servers.properties"):
+        raise HTTPException(status_code=403, detail="Server properties permission required")
     return {
         "available": java_available()
     }
@@ -92,7 +97,7 @@ def install(
     )
 
     # Only admins should install/replace Paper.
-    if user.role != "admin":
+    if not has_permission(user, "servers.properties"):
 
         raise HTTPException(
             status_code=403,
@@ -152,6 +157,8 @@ def status(
         get_current_user
     ),
 ):
+    if not has_permission(user, "servers.view"):
+        raise HTTPException(status_code=403, detail="Server view permission required")
     get_server_for_user(
         db,
         server_id,
@@ -174,6 +181,8 @@ def start(
         get_current_user
     ),
 ):
+    if not has_permission(user, "servers.control"):
+        raise HTTPException(status_code=403, detail="Server control permission required")
     server = get_server_for_user(
         db,
         server_id,
@@ -213,6 +222,8 @@ def stop(
         get_current_user
     ),
 ):
+    if not has_permission(user, "servers.control"):
+        raise HTTPException(status_code=403, detail="Server control permission required")
     get_server_for_user(
         db,
         server_id,
@@ -248,6 +259,8 @@ def command(
         get_current_user
     ),
 ):
+    if not has_permission(user, "console.command"):
+        raise HTTPException(status_code=403, detail="Console command permission required")
     get_server_for_user(
         db,
         server_id,

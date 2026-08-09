@@ -49,7 +49,7 @@ Users | STEMCraft Console
                 </a>
 
                 <span class="role">
-                    {{ user.role }}
+                    {{ user.role_name }}
                 </span>
 
                 <a href="/logout">
@@ -103,16 +103,10 @@ Users | STEMCraft Console
                         required
                     >
 
-                    <select name="role">
-
-                        <option value="user">
-                            User
-                        </option>
-
-                        <option value="admin">
-                            Admin
-                        </option>
-
+                    <select name="role_id">
+                        {% for role in roles %}
+                        <option value="{{ role.id }}">{{ role.name }}</option>
+                        {% endfor %}
                     </select>
 
                     <button class="button">
@@ -155,7 +149,7 @@ Users | STEMCraft Console
                         <div class="user-row-right">
 
                             <span class="role">
-                                {{ account.role }}
+                                {{ account.role_name }}
                             </span>
 
                             {% if account.enabled %}

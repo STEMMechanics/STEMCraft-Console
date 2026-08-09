@@ -93,7 +93,7 @@
             {% endif %}
 
 
-            {% if user.role == "admin" %}
+            {% if user.can("servers.create") %}
 
             <div class="server-menu-divider"></div>
 
@@ -137,6 +137,7 @@
             Overview
         </a>
 
+        {% if user.can("console.view") %}
         <a
             href="/servers/{{ active_server.id }}/console"
             class="nav-link"
@@ -147,8 +148,9 @@
             <i class="fa-solid fa-terminal"></i>
             Console
         </a>
+        {% endif %}
 
-
+        {% if user.can("players.view") %}
         <a
             href="/servers/{{ active_server.id }}/players"
             class="nav-link"
@@ -159,8 +161,9 @@
             <i class="fa-solid fa-user"></i>
             Players
         </a>
+        {% endif %}
 
-
+        {% if user.can("plugins.view") %}
         <a
             href="/servers/{{ active_server.id }}/plugins"
             class="nav-link"
@@ -171,8 +174,9 @@
             <i class="fa-solid fa-cube"></i>
             Plugins
         </a>
+        {% endif %}
 
-
+        {% if user.can("files.view") %}
         <a
             href="/servers/{{ active_server.id }}/files"
             class="nav-link"
@@ -183,8 +187,9 @@
             <i class="fa-regular fa-folder"></i>
             Files
         </a>
+        {% endif %}
 
-
+        {% if user.can("backups.view") %}
         <a
             href="/servers/{{ active_server.id }}/backups"
             class="nav-link"
@@ -195,8 +200,9 @@
             <i class="fa-solid fa-box-archive"></i>
             Backups
         </a>
+        {% endif %}
 
-
+        {% if user.can("servers.properties") %}
         <a
             href="/servers/{{ active_server.id }}/properties"
             class="nav-link"
@@ -207,6 +213,7 @@
             <i class="fa-solid fa-sliders"></i>
             Properties
         </a>
+        {% endif %}
 
         {% endif %}
 
@@ -215,13 +222,15 @@
 
     <div class="sidebar-bottom">
 
+        {% if user.can("system.view") %}
         <a href="/system" class="nav-link" hx-get="/system" hx-target="#page-content" hx-push-url="true">
             <i class="fa-solid fa-server"></i>
             System
         </a>
+        {% endif %}
 
 
-        {% if user.role == "admin" %}
+        {% if user.can("settings.manage") or user.can("users.manage") or user.can("roles.manage") or user.can("system.manage") %}
 
         <a
             href="/settings"

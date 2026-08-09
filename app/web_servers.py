@@ -51,6 +51,7 @@ from .processes import (
 )
 from .server_import import detect_server_directories, inspect_server_directory
 from .server_deletion import delete_managed_server
+from .permissions import has_permission
 
 from .web_context import (
     build_web_context,
@@ -106,7 +107,7 @@ async def web_delete_server(
     user = current_web_user(request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if user.role != "admin":
+    if not has_permission(user, "servers.delete"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
 
     server = db.get(Server, server_id)
@@ -158,7 +159,7 @@ def get_accessible_server(
         return user, None
 
     if (
-        user.role != "admin"
+        not has_permission(user, "servers.view_all")
         and server not in user.servers
     ):
         return user, None
@@ -190,7 +191,7 @@ def servers_page(
             "/login"
         )
 
-    if user.role == "admin":
+    if has_permission(user, "servers.view_all"):
 
         servers = (
             db.query(Server)
@@ -237,7 +238,7 @@ def new_server_page(
         )
 
 
-    if user.role != "admin":
+    if not has_permission(user, "servers.create"):
 
         return RedirectResponse(
             "/dashboard"
@@ -389,7 +390,7 @@ def create_server_web(
         )
 
 
-    if user.role != "admin":
+    if not has_permission(user, "servers.create"):
 
         return RedirectResponse(
             "/dashboard"
@@ -765,7 +766,7 @@ def import_servers_page(
             "/login"
         )
 
-    if user.role != "admin":
+    if not has_permission(user, "servers.create"):
         return RedirectResponse(
             "/dashboard"
         )
@@ -831,7 +832,7 @@ def server_detail(
             "/login"
         )
 
-    if not server:
+    if not server or not has_permission(user, "servers.view"):
         raise HTTPException(
             status_code=404,
             detail="Server not found",
@@ -888,7 +889,7 @@ def web_server_status(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "servers.view"):
         return JSONResponse(
             {
                 "error":
@@ -931,7 +932,7 @@ def web_start_server(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "servers.control"):
         return JSONResponse(
             {
                 "error":
@@ -1016,7 +1017,7 @@ def web_stop_server(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "servers.control"):
         return JSONResponse(
             {
                 "error":
@@ -1077,7 +1078,7 @@ def web_restart_server(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "servers.control"):
         return JSONResponse(
             {
                 "error":
@@ -1161,7 +1162,7 @@ async def web_command(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "console.command"):
         return JSONResponse(
             {
                 "error":
@@ -1246,7 +1247,7 @@ def web_console_data(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "console.view"):
         return JSONResponse(
             {
                 "error":
@@ -1347,7 +1348,7 @@ def console_page(
             "/login"
         )
 
-    if not server:
+    if not server or not has_permission(user, "console.view"):
         raise HTTPException(
             status_code=403,
             detail="Access denied",
@@ -1380,7 +1381,7 @@ async def inspect_import_path(request: Request, db: Session = Depends(get_db)):
     user = current_web_user(request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if user.role != "admin":
+    if not has_permission(user, "servers.create"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
     data = await request.json()
     return inspect_server_directory(
@@ -1412,7 +1413,7 @@ def import_server(
             "/login"
         )
 
-    if user.role != "admin":
+    if not has_permission(user, "servers.create"):
         return RedirectResponse(
             "/dashboard"
         )
@@ -1502,7 +1503,7 @@ def web_paper_status(server_id: int, request: Request, version: str | None = Non
     user, server = get_accessible_server(server_id, request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if not server:
+    if not server or not has_permission(user, "servers.properties"):
         return JSONResponse({"error": "Access denied"}, status_code=403)
     try:
         versions = get_versions()
@@ -1536,7 +1537,7 @@ async def web_install_paper(server_id: int, request: Request, db: Session = Depe
     user, server = get_accessible_server(server_id, request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if not server or user.role != "admin":
+    if not server or not has_permission(user, "servers.properties"):
         return JSONResponse({"error": "Administrator access required"}, status_code=403)
     if server_status(server.id).get("running"):
         return JSONResponse({"error": "Stop the server before changing Paper"}, status_code=409)
@@ -1578,7 +1579,7 @@ def web_process_stats(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "servers.view"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,

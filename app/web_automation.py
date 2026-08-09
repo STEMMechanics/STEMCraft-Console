@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from .database import get_db
 from .models import ScheduledTask, ServerMetric, TaskRun
 from .web_servers import get_accessible_server
+from .permissions import has_permission
 
 
 router = APIRouter()
@@ -47,7 +48,7 @@ async def create_schedule(server_id: int, request: Request, db: Session = Depend
     user, server = get_accessible_server(server_id, request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if not server or user.role != "admin":
+    if not server or not has_permission(user, "automation.manage"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
     data = await request.json()
     task_type = str(data.get("task_type", ""))
@@ -82,7 +83,7 @@ def delete_schedule(server_id: int, task_id: int, request: Request, db: Session 
     user, server = get_accessible_server(server_id, request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if not server or user.role != "admin":
+    if not server or not has_permission(user, "automation.manage"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
     task = db.get(ScheduledTask, task_id)
     if not task or task.server_id != server.id:

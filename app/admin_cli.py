@@ -6,12 +6,14 @@ import secrets
 
 from .auth import hash_password
 from .database import SessionLocal
-from .models import User
+from .models import AccessRole, User
 
 
 def ensure_initial_admin(db, username: str, password: str | None = None):
     if db.query(User).filter(User.role == "admin").first():
         return None
+
+    administrator = db.query(AccessRole).filter(AccessRole.name == "Administrator").first()
 
     temporary_password = password or secrets.token_urlsafe(18)
     db.add(
@@ -19,6 +21,7 @@ def ensure_initial_admin(db, username: str, password: str | None = None):
             username=username,
             password_hash=hash_password(temporary_password),
             role="admin",
+            role_id=administrator.id if administrator else None,
             enabled=True,
             must_change_password=True,
         )

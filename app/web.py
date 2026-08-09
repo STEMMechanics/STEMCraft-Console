@@ -24,6 +24,7 @@ from .database import get_db
 from .models import Server, User
 from .processes import register_server, server_status
 from .player_manager import get_online_players
+from .permissions import has_permission
 
 from .auth import (
     hash_password,
@@ -262,7 +263,10 @@ def web_system_stats(
             1,
         )
 
-    servers = db.query(Server).order_by(Server.name).all() if user.role == "admin" else sorted(user.servers, key=lambda item: item.name.lower())
+    if not has_permission(user, "system.view"):
+        return JSONResponse({"error": "System view permission required"}, status_code=403)
+
+    servers = db.query(Server).order_by(Server.name).all() if has_permission(user, "servers.view_all") else sorted(user.servers, key=lambda item: item.name.lower())
     instances = []
     total_players = 0
     running_count = 0
@@ -346,6 +350,9 @@ def system_page(
         return RedirectResponse(
             "/login"
         )
+
+    if not has_permission(user, "system.view"):
+        return RedirectResponse("/dashboard")
 
     context = build_web_context(
         db,

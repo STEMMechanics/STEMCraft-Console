@@ -32,6 +32,7 @@ from .web_render import (
 from .web_servers import (
     get_accessible_server,
 )
+from .permissions import has_permission
 
 from .backup_jobs import start_backup_job
 
@@ -67,7 +68,7 @@ def backups_page(
             "/login"
         )
 
-    if not server:
+    if not server or not has_permission(user, "backups.view"):
         raise HTTPException(
             status_code=403,
             detail="Access denied",
@@ -115,7 +116,7 @@ def backups_data(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "backups.view"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -157,7 +158,7 @@ async def create_backup_api(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "backups.manage"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -235,7 +236,7 @@ async def delete_backup_api(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "backups.manage"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -287,7 +288,7 @@ async def restore_backup_api(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "backups.manage"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -354,7 +355,7 @@ def download_backup(
             status_code=401
         )
 
-    if not server:
+    if not server or not has_permission(user, "backups.view"):
         raise HTTPException(
             status_code=403
         )
@@ -397,7 +398,7 @@ def backup_jobs_api(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "backups.view"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,

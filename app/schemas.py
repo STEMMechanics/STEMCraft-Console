@@ -3,7 +3,6 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-Role = Literal["admin", "user"]
 ProcessBackend = Literal["subprocess", "systemd"]
 
 
@@ -28,7 +27,7 @@ class UserCreate(BaseModel):
         max_length=128,
     )
 
-    role: Role = "user"
+    role_id: int
 
 
 class UserUpdate(BaseModel):
@@ -38,7 +37,7 @@ class UserUpdate(BaseModel):
         max_length=128,
     )
 
-    role: Role | None = None
+    role_id: int | None = None
 
     enabled: bool | None = None
 
@@ -50,7 +49,8 @@ class UserOut(BaseModel):
 
     id: int
     username: str
-    role: Role
+    role_id: int
+    role_name: str
     enabled: bool
 
 

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from .database import get_db
 from .models import User
 from .config import SECRET_KEY
+from .permissions import has_permission
 
 
 ALGORITHM = "HS256"
@@ -52,7 +53,8 @@ def create_access_token(user: User) -> str:
 
         "username": user.username,
 
-        "role": user.role,
+        "role": user.role_name,
+        "role_id": user.role_id,
 
         "iat": now,
 
@@ -116,11 +118,35 @@ def require_admin(
     ),
 ):
 
-    if user.role != "admin":
+    if not has_permission(user, "users.manage"):
 
         raise HTTPException(
             status_code=403,
             detail="Administrator access required",
         )
 
+    return user
+
+
+def require_users_manage(user: User = Depends(get_current_user)):
+    if not has_permission(user, "users.manage"):
+        raise HTTPException(status_code=403, detail="User management permission required")
+    return user
+
+
+def require_servers_create(user: User = Depends(get_current_user)):
+    if not has_permission(user, "servers.create"):
+        raise HTTPException(status_code=403, detail="Server creation permission required")
+    return user
+
+
+def require_servers_properties(user: User = Depends(get_current_user)):
+    if not has_permission(user, "servers.properties"):
+        raise HTTPException(status_code=403, detail="Server properties permission required")
+    return user
+
+
+def require_servers_delete(user: User = Depends(get_current_user)):
+    if not has_permission(user, "servers.delete"):
+        raise HTTPException(status_code=403, detail="Server deletion permission required")
     return user

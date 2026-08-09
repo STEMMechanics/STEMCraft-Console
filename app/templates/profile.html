@@ -24,7 +24,7 @@ Profile | STEMCraft Console
                 Servers
             </a>
 
-            {% if user.role == "admin" %}
+            {% if user.can("users.manage") %}
 
             <a href="/users">
                 Users
@@ -48,7 +48,7 @@ Profile | STEMCraft Console
                 {{ user.username }}
 
                 <span class="role">
-                    {{ user.role }}
+                    {{ user.role_name }}
                 </span>
 
                 <a href="/logout">
