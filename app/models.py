@@ -377,6 +377,8 @@ class ScheduledTask(Base):
     run_hour = Column(Integer, nullable=True)
     run_weekday = Column(Integer, nullable=True)
     cron_expression = Column(String(100), nullable=True)
+    remote_destination = Column(String(500), nullable=True)
+    remote_retention_count = Column(Integer, nullable=True)
     retention_count = Column(Integer, nullable=True)
     enabled = Column(Boolean, nullable=False, default=True)
     next_run_at = Column(DateTime, nullable=False, index=True)

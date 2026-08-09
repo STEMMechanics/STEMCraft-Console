@@ -25,6 +25,12 @@
         <label><span>Name this job</span><input name="name" maxlength="100" placeholder="Daily backup" required></label>
         {% include "partials/schedule_when_fields.html" %}
         <label><span>How many backups should we keep?</span><input name="retention_count" type="number" min="1" max="10000" value="7" required></label>
+        <div class="offsite-schedule-fields">
+          <label><span>Off-site copy (optional)</span><input name="remote_destination" list="rclone-remotes" maxlength="500" placeholder="b2:bucket/minecraft-backups"><small>Uses a remote from the server's rclone configuration.</small></label>
+          <label><span>How many off-site backups should we keep?</span><input name="remote_retention_count" type="number" min="1" max="10000" value="30"></label>
+          <datalist id="rclone-remotes"></datalist>
+          <div id="offsite-availability" class="muted-small"></div>
+        </div>
         <button class="button" type="submit">Schedule backup</button>
       </form>
       {% endif %}

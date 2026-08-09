@@ -62,8 +62,76 @@ from .system_operation import (
     current_operation,
     update_operation,
 )
+from .offsite_backups import (
+    OffsiteBackupError, configured_remotes, delete_remote, managed_config_path,
+    remote_settings, save_remote, test_destination,
+)
 
 router = APIRouter()
+
+
+@router.get("/api/web/settings/offsite-backups")
+def offsite_backup_settings(request: Request, db: Session = Depends(get_db)):
+    admin = current_web_user(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not has_permission(admin, "settings.manage"):
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+    try:
+        return {"available": True, "remotes": configured_remotes(refresh=True),
+                "destinations": remote_settings(), "config": str(managed_config_path())}
+    except OffsiteBackupError as error:
+        message = str(error)
+        return {
+            "available": False,
+            "remotes": [],
+            "destinations": [],
+            "reason": "not_installed" if "not installed" in message.lower() else "unavailable",
+            "error": message,
+        }
+
+
+@router.post("/api/web/settings/offsite-backups/test")
+async def test_offsite_backup_settings(request: Request, db: Session = Depends(get_db)):
+    admin = current_web_user(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not has_permission(admin, "settings.manage"):
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+    destination = str((await request.json()).get("destination", ""))
+    try:
+        test_destination(destination)
+    except OffsiteBackupError as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    return {"success": True}
+
+
+@router.post("/api/web/settings/offsite-backups/remotes")
+async def save_offsite_remote(request: Request, db: Session = Depends(get_db)):
+    admin = current_web_user(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not has_permission(admin, "settings.manage"):
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+    try:
+        remote = save_remote(await request.json())
+    except OffsiteBackupError as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    return {"success": True, "remote": remote}
+
+
+@router.delete("/api/web/settings/offsite-backups/remotes/{name}")
+def remove_offsite_remote(name: str, request: Request, db: Session = Depends(get_db)):
+    admin = current_web_user(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not has_permission(admin, "settings.manage"):
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+    try:
+        delete_remote(name)
+    except OffsiteBackupError as error:
+        return JSONResponse({"error": str(error)}, status_code=404)
+    return {"success": True}
 
 
 @router.get(

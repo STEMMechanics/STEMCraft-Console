@@ -268,6 +268,7 @@ override it with `STEMCRAFT_CONSOLE_MAX_UPLOAD_BYTES` when required.
 | Python      | Python 3.10 or newer                                                |
 | Database    | SQLite                                                             |
 | Java        | Java 21 by default; the managed Minecraft version must support it   |
+| Off-site backups | rclone (optional)                                           |
 | Development | macOS is supported locally; Windows is not currently supported     |
 
 > PaperMC is the primary server platform targeted by STEMCraft Console. Other Paper-compatible or Bukkit-derived implementations may work but are not currently tested or officially supported.
@@ -295,6 +296,24 @@ User access
 ```
 
 The console is intended to provide the common administration tools required to operate STEMCraft without requiring routine shell access to the server.
+
+### Off-site Backups
+
+Scheduled backups can copy the completed local ZIP to any configured
+[rclone](https://rclone.org/) remote, including Backblaze B2, Storj, S3 and
+SFTP. Install rclone on the console server, then add and test destinations from
+**Settings → Off-site Backups**. The panel writes credentials to a private
+service-owned configuration file; saved secrets are not returned to the browser.
+An explicit configuration location remains available for advanced deployments:
+
+```env
+STEMCRAFT_RCLONE_CONFIG=/etc/stemcraft-console/rclone.conf
+```
+
+Use Settings to test a bucket or directory. A backup schedule accepts a destination such as
+`b2:bucket/minecraft-backups` and maintains independent local and off-site
+retention counts. Local backup success is preserved if an upload fails; the run
+is shown with a warning so it can be retried or investigated.
 
 ### Server Processes
 

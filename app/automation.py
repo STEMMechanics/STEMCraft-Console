@@ -15,6 +15,7 @@ from .models import BackupJob, ScheduledTask, Server, ServerMetric, TaskRun
 from .player_manager import get_online_players
 from .processes import register_server, send_command, server_process_stats, server_status
 from .config import SCHEDULE_TIMEZONE
+from .offsite_backups import OffsiteBackupError, enforce_remote_retention, upload_backup
 
 
 _stop = threading.Event()
@@ -180,10 +181,19 @@ def execute_task(task_id: int) -> None:
                 raise RuntimeError(job.message or "Backup failed")
             enforce_backup_retention(server, task.retention_count)
             run.detail = f"Created {job.filename}"
+            if task.remote_destination:
+                try:
+                    remote_file = upload_backup(server, job.filename, task.remote_destination)
+                    enforce_remote_retention(server, task.remote_destination, task.remote_retention_count)
+                    run.detail += f" · copied to {remote_file}"
+                except OffsiteBackupError as error:
+                    run.status = "warning"
+                    run.detail += f" · off-site copy failed: {error}"
         else:
             raise RuntimeError("Unsupported scheduled task type")
 
-        run.status = "complete"
+        if run.status == "running":
+            run.status = "complete"
         run.finished_at = datetime.utcnow()
         db.commit()
     except Exception as error:
