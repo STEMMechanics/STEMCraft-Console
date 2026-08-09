@@ -446,6 +446,7 @@ a {
 .button {
   display: flex;
   align-items: center;
+  gap: 6px;
 }
 
 .button,
