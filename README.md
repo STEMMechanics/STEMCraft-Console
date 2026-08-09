@@ -327,6 +327,10 @@ the panel service permission to manage only `stemcraft-server@*.service` units;
 server names, JAR filenames, memory values, and JVM arguments are validated and
 passed without a shell.
 
+For a systemd-backed server, **Start** enables the instance and starts it
+immediately, so it also starts automatically after a host reboot. **Stop** stops
+and disables the instance. **Restart** leaves its enabled state unchanged.
+
 The installed units are:
 
 - `stemcraft-console.service` for the web panel and scheduled work.

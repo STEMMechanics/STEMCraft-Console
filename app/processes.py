@@ -75,7 +75,17 @@ def _systemctl(config: ServerProcessConfig, action: str, check: bool = True):
     if action not in {"start", "stop", "restart", "show"}:
         raise ValueError("Invalid systemctl action")
     unit = f"{SYSTEMD_UNIT_PREFIX}{config.service_name}.service"
-    command = ["systemctl", action, unit]
+    # A systemd-backed server is expected to survive panel and host restarts.
+    # Keep the unit-file state in sync with the panel lifecycle controls instead
+    # of leaving a successfully started instance reported as "disabled".
+    systemd_action = {
+        "start": "enable",
+        "stop": "disable",
+    }.get(action, action)
+    command = ["systemctl", systemd_action]
+    if action in {"start", "stop"}:
+        command.append("--now")
+    command.append(unit)
     if action == "show":
         command.extend(["--property=ActiveState", "--property=MainPID"])
     return subprocess.run(command, capture_output=True, text=True, timeout=30, check=check)
