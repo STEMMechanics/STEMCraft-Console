@@ -48,6 +48,8 @@ def _run_rclone(*args: str, input_text=None) -> subprocess.CompletedProcess:
         )
     except subprocess.TimeoutExpired as error:
         raise OffsiteBackupError("Off-site transfer timed out") from error
+    except OSError as error:
+        raise OffsiteBackupError("rclone is installed but could not be started") from error
     if result.returncode:
         detail = (result.stderr or result.stdout or "rclone failed").strip().splitlines()[-1]
         raise OffsiteBackupError(detail[:500])

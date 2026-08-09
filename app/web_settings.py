@@ -81,7 +81,14 @@ def offsite_backup_settings(request: Request, db: Session = Depends(get_db)):
         return {"available": True, "remotes": configured_remotes(refresh=True),
                 "destinations": remote_settings(), "config": str(managed_config_path())}
     except OffsiteBackupError as error:
-        return {"available": False, "remotes": [], "error": str(error)}
+        message = str(error)
+        return {
+            "available": False,
+            "remotes": [],
+            "destinations": [],
+            "reason": "not_installed" if "not installed" in message.lower() else "unavailable",
+            "error": message,
+        }
 
 
 @router.post("/api/web/settings/offsite-backups/test")

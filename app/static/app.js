@@ -4048,25 +4048,28 @@ let offsiteRemoteState = [];
 
 async function loadOffsiteBackupSettings() {
   const status = document.getElementById("offsite-settings-status");
+  const list = document.getElementById("offsite-remote-list");
   if (!status) return;
   try {
     const response = await fetch("/api/web/settings/offsite-backups");
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Unable to load off-site backup status");
+    if (!response.ok) throw new Error(data.error || "Off-site backups could not be checked.");
     status.textContent = data.available
-      ? `${data.remotes.length} remote${data.remotes.length === 1 ? "" : "s"} configured · ${data.config}`
-      : data.error;
+      ? `${data.remotes.length} destination${data.remotes.length === 1 ? "" : "s"} configured`
+      : data.reason === "not_installed"
+        ? "rclone is not installed. Install it to enable off-site backups."
+        : `Off-site backups are unavailable: ${data.error}`;
     const options = document.getElementById("offsite-settings-remotes");
     options.innerHTML = (data.remotes || []).map((remote) => `<option value="${escapeHtml(remote)}:"></option>`).join("");
     offsiteRemoteState = data.destinations || [];
-    const list = document.getElementById("offsite-remote-list");
     list.innerHTML = offsiteRemoteState.length ? offsiteRemoteState.map((remote) => `
       <div class="offsite-remote-row">
         <div><strong>${escapeHtml(remote.name)}</strong><small>${escapeHtml(offsiteProviderName(remote.backend))}${remote.host ? ` · ${escapeHtml(remote.user || "")}@${escapeHtml(remote.host)}` : ""}</small></div>
         <div class="offsite-remote-actions"><button class="button" type="button" onclick="testNamedOffsiteRemote('${escapeJsString(remote.name)}')">Test</button>${["b2", "storj", "sftp"].includes(remote.backend) ? `<button class="button" type="button" onclick="openOffsiteRemoteModal('${escapeJsString(remote.name)}')">Edit</button>` : ""}<button class="button danger" type="button" onclick="deleteOffsiteRemote('${escapeJsString(remote.name)}')">Remove</button></div>
-      </div>`).join("") : '<div class="empty-message">No off-site destinations configured yet.</div>';
+      </div>`).join("") : `<div class="empty-message">${data.reason === "not_installed" ? "Install rclone, then add your first destination here." : "No off-site destinations configured yet."}</div>`;
   } catch (error) {
-    status.textContent = error.message;
+    status.textContent = "Off-site backups could not be checked. Try refreshing after restarting the panel.";
+    if (list) list.innerHTML = '<div class="empty-message">No destination information is available.</div>';
   }
 }
 
