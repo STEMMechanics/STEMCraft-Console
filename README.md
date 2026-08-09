@@ -164,18 +164,18 @@ sudo ./scripts/rollback.sh /var/lib/stemcraft-console/upgrades/TIMESTAMP
 ### Publishing a release
 
 Set `APP_VERSION` in `app/version.py`, merge the release-preparation PR, then
-tag that exact commit. For version 0.2.0:
+tag that exact commit. For version 0.2.1:
 
 ```bash
 git switch main
 git pull --ff-only
-git tag 0.2.0
-git push origin 0.2.0
+git tag 0.2.1
+git push origin 0.2.1
 ```
 
 The release workflow verifies that the tag matches `APP_VERSION`, creates the
 GitHub release, and attaches a versioned application archive with its SHA-256
-checksum. Both `0.2.0` and `v0.2.0` tag styles are supported, but the existing
+checksum. Both `0.2.1` and `v0.2.1` tag styles are supported, but the existing
 unprefixed style is preferred for consistency. The one-line installer resolves
 GitHub's latest published release and will begin installing it once the release
 has been published.
@@ -268,6 +268,7 @@ override it with `STEMCRAFT_CONSOLE_MAX_UPLOAD_BYTES` when required.
 | Python      | Python 3.10 or newer                                                |
 | Database    | SQLite                                                             |
 | Java        | Java 21 by default; the managed Minecraft version must support it   |
+| Off-site backups | rclone (optional)                                           |
 | Development | macOS is supported locally; Windows is not currently supported     |
 
 > PaperMC is the primary server platform targeted by STEMCraft Console. Other Paper-compatible or Bukkit-derived implementations may work but are not currently tested or officially supported.
@@ -295,6 +296,24 @@ User access
 ```
 
 The console is intended to provide the common administration tools required to operate STEMCraft without requiring routine shell access to the server.
+
+### Off-site Backups
+
+Scheduled backups can copy the completed local ZIP to any configured
+[rclone](https://rclone.org/) remote, including Backblaze B2, Storj, S3 and
+SFTP. Install rclone on the console server, then add and test destinations from
+**Settings → Off-site Backups**. The panel writes credentials to a private
+service-owned configuration file; saved secrets are not returned to the browser.
+An explicit configuration location remains available for advanced deployments:
+
+```env
+STEMCRAFT_RCLONE_CONFIG=/etc/stemcraft-console/rclone.conf
+```
+
+Use Settings to test a bucket or directory. A backup schedule accepts a destination such as
+`b2:bucket/minecraft-backups` and maintains independent local and off-site
+retention counts. Local backup success is preserved if an upload fails; the run
+is shown with a warning so it can be retried or investigated.
 
 ### Server Processes
 
