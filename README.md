@@ -164,18 +164,18 @@ sudo ./scripts/rollback.sh /var/lib/stemcraft-console/upgrades/TIMESTAMP
 ### Publishing a release
 
 Set `APP_VERSION` in `app/version.py`, merge the release-preparation PR, then
-tag that exact commit. For version 0.1.4:
+tag that exact commit. For version 0.2.0:
 
 ```bash
 git switch main
 git pull --ff-only
-git tag 0.1.4
-git push origin 0.1.4
+git tag 0.2.0
+git push origin 0.2.0
 ```
 
 The release workflow verifies that the tag matches `APP_VERSION`, creates the
 GitHub release, and attaches a versioned application archive with its SHA-256
-checksum. Both `0.1.4` and `v0.1.4` tag styles are supported, but the existing
+checksum. Both `0.2.0` and `v0.2.0` tag styles are supported, but the existing
 unprefixed style is preferred for consistency. The one-line installer resolves
 GitHub's latest published release and will begin installing it once the release
 has been published.
@@ -284,7 +284,8 @@ Each server has its own:
 Server directory
 Minecraft version
 PaperMC build
-Java memory allocation
+Initial and maximum Java memory allocation
+Server JAR and JVM startup options
 Network port
 Plugins
 Configuration
@@ -333,9 +334,11 @@ Running the command manually remains useful for deployments that migrate before
 restarting the service.
 
 Administrators can check for releases, install or roll back an update, and
-restart the console from the Application Version row in System Settings. The
-panel waits for systemd to bring the service back and then reloads the page, so
-routine upgrades do not require an SSH session.
+restart the console from the Application Version row in System Settings. A
+server-wide maintenance lock prevents connected users from making changes
+during these operations. The panel waits for systemd to bring the service back
+and then reloads every connected client, so routine upgrades do not require an
+SSH session.
 
 Developers making model changes can generate a migration with:
 
@@ -357,8 +360,11 @@ Database migrations are designed to allow existing installations to upgrade with
 
 STEMCraft Console requires authenticated user accounts and supports:
 
-- Administrator and standard user roles
-- Per-server access permissions
+- Single-role user assignments without role inheritance
+- Fine-grained permissions for servers, console, players, plugins, files,
+  backups, automation, users, roles, system controls, and global settings
+- An immutable Administrator role with full access
+- Per-server access permissions for roles without global server access
 - Password hashing
 - Forced password changes
 - TOTP two-factor authentication
@@ -369,6 +375,11 @@ STEMCraft Console requires authenticated user accounts and supports:
 The management interface provides access to Minecraft console commands, server files and configuration. It should therefore be treated as an administrative interface.
 
 Production installations should use HTTPS and should not expose the console to untrusted networks without appropriate security controls.
+
+The authenticated interface supports desktop, tablet, and mobile viewport
+sizes. Navigation, forms, tables, dialogs, notifications, and server-management
+controls adapt at responsive breakpoints without requiring a separate mobile
+application.
 
 ### Reporting a Vulnerability
 
