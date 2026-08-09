@@ -4769,6 +4769,7 @@ function beginSystemOperation(title, message, phase = "working", local = true) {
   overlay.classList.remove("failed");
   document.getElementById("system-operation-spinner").hidden = false;
   document.getElementById("system-operation-failed-icon").hidden = true;
+  document.getElementById("system-operation-note").hidden = false;
   document.getElementById("system-operation-close").hidden = true;
   document.body.classList.add("system-operation-active");
   const shell = document.querySelector(".app-shell");
@@ -4788,6 +4789,7 @@ function failSystemOperation(message) {
   document.getElementById("system-operation-message").textContent = message;
   document.getElementById("system-operation-spinner").hidden = true;
   document.getElementById("system-operation-failed-icon").hidden = false;
+  document.getElementById("system-operation-note").hidden = true;
   document.getElementById("system-operation-close").hidden = false;
   document.getElementById("system-operation-close").focus();
 }
