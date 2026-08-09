@@ -443,6 +443,11 @@ a {
   color: var(--muted);
 }
 
+.button {
+  display: flex;
+  align-items: center;
+}
+
 .button,
 button {
   min-height: 40px;
