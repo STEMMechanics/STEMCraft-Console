@@ -27,6 +27,29 @@ def test_destination_must_use_a_configured_remote(monkeypatch):
         offsite_backups.validate_destination("sftp:backups")
 
 
+def test_destination_is_built_from_separate_remote_and_path(monkeypatch):
+    monkeypatch.setattr(offsite_backups, "configured_remotes", lambda: ["sftp"])
+
+    assert offsite_backups.destination_from_parts("sftp", "/backups/worlds/") == "sftp:backups/worlds"
+    with pytest.raises(OffsiteBackupError, match="Choose a configured"):
+        offsite_backups.destination_from_parts("username:", "backups")
+
+
+def test_connection_test_has_short_timeouts(monkeypatch):
+    calls = []
+    monkeypatch.setattr(offsite_backups, "configured_remotes", lambda: ["sftp"])
+    monkeypatch.setattr(
+        offsite_backups, "_run_rclone",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or completed(),
+    )
+
+    offsite_backups.test_destination("sftp:backups")
+
+    assert calls[0][1] == {"timeout_seconds": 20}
+    assert "--contimeout" in calls[0][0]
+    assert "--retries" in calls[0][0]
+
+
 def test_upload_uses_copyto_without_a_shell(monkeypatch, tmp_path):
     server_root = tmp_path / "creative"
     backup_dir = server_root / "backups"

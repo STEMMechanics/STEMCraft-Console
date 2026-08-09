@@ -63,7 +63,7 @@ from .system_operation import (
     update_operation,
 )
 from .offsite_backups import (
-    OffsiteBackupError, configured_remotes, delete_remote, managed_config_path,
+    OffsiteBackupError, configured_remotes, delete_remote, destination_from_parts, managed_config_path,
     remote_settings, save_remote, test_destination,
 )
 
@@ -98,8 +98,14 @@ async def test_offsite_backup_settings(request: Request, db: Session = Depends(g
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
     if not has_permission(admin, "settings.manage"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
-    destination = str((await request.json()).get("destination", ""))
+    data = await request.json()
     try:
+        if "remote" in data:
+            destination = destination_from_parts(
+                str(data.get("remote", "")), str(data.get("path", "")),
+            )
+        else:
+            destination = str(data.get("destination", ""))
         test_destination(destination)
     except OffsiteBackupError as error:
         return JSONResponse({"error": str(error)}, status_code=400)
