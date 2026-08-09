@@ -4046,7 +4046,7 @@ async function loadOffsiteBackupSettings() {
   try {
     const response = await fetch("/api/web/settings/offsite-backups");
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Unable to inspect rclone");
+    if (!response.ok) throw new Error(data.error || "Unable to load off-site backup status");
     status.textContent = data.available
       ? `${data.remotes.length} remote${data.remotes.length === 1 ? "" : "s"} configured · ${data.config}`
       : data.error;

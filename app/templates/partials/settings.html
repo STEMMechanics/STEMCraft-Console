@@ -215,11 +215,32 @@
             </label>
             <div class="settings-save-row">
                 <span id="offsite-test-status" class="muted-small"></span>
+                <button class="button" type="button" onclick="document.getElementById('rclone-help-modal').hidden = false">
+                    <i class="fa-solid fa-circle-info"></i> Installation help
+                </button>
                 <button class="button" type="button" onclick="loadOffsiteBackupSettings()">Refresh</button>
                 <button class="button" type="button" onclick="testOffsiteBackupDestination()">Test connection</button>
             </div>
         </div>
     </section>
+
+    <div id="rclone-help-modal" class="modal-backdrop" hidden>
+        <div class="modal-card rclone-help-modal" role="dialog" aria-modal="true" aria-labelledby="rclone-help-title">
+            <h2 id="rclone-help-title">Set up off-site backups</h2>
+            <p>rclone is optional. Local backups continue to work when it is not installed.</p>
+            <ol class="setup-steps">
+                <li><strong>Install rclone on the console server</strong><code>sudo -v; curl https://rclone.org/install.sh | sudo bash</code></li>
+                <li><strong>Configure a remote as the service user</strong><code>sudo -u stemcraft rclone config --config /var/lib/stemcraft-console/rclone.conf</code></li>
+                <li><strong>Add the config path to console.env</strong><code>STEMCRAFT_RCLONE_CONFIG=/var/lib/stemcraft-console/rclone.conf</code></li>
+                <li><strong>Restart the panel</strong><code>sudo systemctl restart stemcraft-console</code></li>
+            </ol>
+            <p class="modal-note">The installation command is from the official rclone project. Review it at rclone.org/install before running it if required by your security policy.</p>
+            <div class="modal-actions">
+                <a class="button" href="https://rclone.org/install/" target="_blank" rel="noopener noreferrer">Official instructions</a>
+                <button class="button" type="button" onclick="document.getElementById('rclone-help-modal').hidden = true">Close</button>
+            </div>
+        </div>
+    </div>
 
     <section class="overview-card settings-section">
 
