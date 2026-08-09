@@ -2824,12 +2824,20 @@ input[type="checkbox"] {
   grid-column: 1 / -1;
 }
 
+.import-server-actions {
+  justify-content: flex-end;
+}
+
 .import-inspection-report {
   display: grid;
   gap: 8px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.import-review-modal {
+  width: min(560px, 100%);
 }
 
 @media (max-width: 1100px) {
