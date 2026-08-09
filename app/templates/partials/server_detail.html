@@ -26,7 +26,7 @@
     <div class="overview-card summary-card version-summary-card">
       <span class="card-label">Server Version</span>
       <div class="summary-value">
-        {{ server.minecraft_version or "Unknown" }}{% if server.paper_build %} <small>(build {{ server.paper_build }})</small>{% endif %}
+        <span id="paper-installed-version">{{ server.minecraft_version or "Unknown" }}{% if server.paper_build %} <small>(build {{ server.paper_build }})</small>{% endif %}</span>
       </div>
       <small id="paper-version-detail" class="summary-footnote">Checking Paper releases...</small>
     </div>

@@ -1,6 +1,8 @@
 import hashlib
 import io
 import pytest
+import json
+import zipfile
 
 from app import paper
 
@@ -91,3 +93,28 @@ def test_download_paper_installs_explicit_build(monkeypatch, tmp_path):
 
     assert result["build"] == "107"
     assert (tmp_path / "paper.jar").read_bytes() == selected_payload
+
+
+def test_inspect_paper_jar_reads_version_and_matches_published_build(tmp_path):
+    jar = tmp_path / "paper.jar"
+    with zipfile.ZipFile(jar, "w") as archive:
+        archive.writestr("version.json", json.dumps({"id": "26.2"}))
+    checksum = hashlib.sha256(jar.read_bytes()).hexdigest()
+    builds = [
+        {"id": 111, "downloads": {"server:default": {"checksums": {"sha256": "0" * 64}}}},
+        {"id": 63, "downloads": {"server:default": {"checksums": {"sha256": checksum}}}},
+    ]
+
+    inspection = paper.inspect_paper_jar(jar)
+
+    assert inspection == {"version": "26.2", "sha256": checksum}
+    assert paper.match_paper_build(inspection["sha256"], builds) == "63"
+
+
+def test_inspect_paper_jar_rejects_non_paper_jar(tmp_path):
+    jar = tmp_path / "server.jar"
+    with zipfile.ZipFile(jar, "w") as archive:
+        archive.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\n")
+
+    with pytest.raises(ValueError, match="identify the installed Paper JAR"):
+        paper.inspect_paper_jar(jar)
