@@ -443,7 +443,7 @@ a {
   color: var(--muted);
 }
 
-.button {
+a.button {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3196,6 +3196,7 @@ input[type="checkbox"] {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
+  padding: 0 20px;
 }
 
 .offsite-remote-row {
@@ -3203,7 +3204,7 @@ input[type="checkbox"] {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 14px;
+  padding: 12px 0;
 }
 
 .offsite-remote-row + .offsite-remote-row {
@@ -3872,4 +3873,22 @@ input[type="checkbox"] {
   .server-create-actions {
     position: static;
   }
+}
+
+.settings-version-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.settings-version-info-field {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: end;
+}
+
+.settings-version-info-buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: end;
 }

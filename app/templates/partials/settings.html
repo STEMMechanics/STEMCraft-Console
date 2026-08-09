@@ -447,26 +447,30 @@
 
                 <div class="settings-version-info">
 
-                    <code>
-                        v{{ app_version }}
-                    </code>
+                    <div class="settings-version-info-field">
+                        <code>
+                            v{{ app_version }}
+                        </code>
 
-                    <span id="console-update-status" class="muted-small">
-                        Checking for updates...
-                    </span>
+                        <span id="console-update-status" class="muted-small">
+                            Checking for updates...
+                        </span>
+                    </div>
 
-                    {% if user.can("system.manage") %}<button id="console-update-button" class="button" onclick="upgradeConsole()" hidden>
-                        Upgrade
-                    </button>
+                    <div class="settings-version-info-buttons">
+                        {% if user.can("system.manage") %}<button id="console-update-button" class="button" onclick="upgradeConsole()" hidden>
+                            Upgrade
+                        </button>
 
-                    <button id="console-rollback-button" class="button" onclick="rollbackConsoleUpdate()" hidden>
-                        Roll back
-                    </button>
+                        <button id="console-rollback-button" class="button" onclick="rollbackConsoleUpdate()" hidden>
+                            Roll back
+                        </button>
 
-                    <button id="console-restart-button" class="button" onclick="restartConsoleService()">
-                        Restart Console
-                    </button>
-                    {% endif %}
+                        <button id="console-restart-button" class="button" onclick="restartConsoleService()">
+                            Restart Console
+                        </button>
+                        {% endif %}
+                    </div>
 
                 </div>
 
