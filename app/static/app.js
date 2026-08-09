@@ -4966,9 +4966,9 @@ async function upgradeConsole() {
     button.hidden = true;
     await waitForConsoleRestart();
   } catch (error) {
-    status.textContent = error.message;
     button.disabled = false;
     failSystemOperation(error.message);
+    updateConsoleVersionStatus();
   }
 }
 
@@ -4977,7 +4977,6 @@ function delay(milliseconds) {
 }
 
 async function waitForConsoleRestart() {
-  const status = document.getElementById("console-update-status");
   const deadline = Date.now() + 90000;
 
   await delay(2500);
@@ -4999,8 +4998,8 @@ async function waitForConsoleRestart() {
   }
 
   const message = "The console service did not return within 90 seconds. Check the service logs before trying again.";
-  if (status) status.textContent = message;
   failSystemOperation(message);
+  updateConsoleVersionStatus();
 }
 
 async function restartConsoleService() {
@@ -5025,9 +5024,9 @@ async function restartConsoleService() {
     if (!response.ok) throw new Error(data.error || "Restart failed");
     await waitForConsoleRestart();
   } catch (error) {
-    status.textContent = error.message;
     button.disabled = false;
     failSystemOperation(error.message);
+    updateConsoleVersionStatus();
   }
 }
 
@@ -5241,9 +5240,9 @@ async function rollbackConsoleUpdate() {
     button.hidden = true;
     await waitForConsoleRestart();
   } catch (error) {
-    status.textContent = error.message;
     button.disabled = false;
     failSystemOperation(error.message);
+    updateConsoleVersionStatus();
   }
 }
 
