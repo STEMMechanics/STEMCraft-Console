@@ -96,8 +96,22 @@ def test_systemctl_uses_argument_list_without_shell(monkeypatch):
     monkeypatch.setattr(processes.subprocess, "run", lambda command, **kwargs: captured.update(command=command, kwargs=kwargs))
     config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
     processes._systemctl(config, "start")
-    assert captured["command"] == ["systemctl", "start", "stemcraft-server@survival.service"]
+    assert captured["command"] == [
+        "systemctl", "enable", "--now", "stemcraft-server@survival.service",
+    ]
     assert "shell" not in captured["kwargs"]
+
+
+def test_systemctl_stop_disables_instance(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(processes.subprocess, "run", lambda command, **kwargs: captured.update(command=command))
+    config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
+
+    processes._systemctl(config, "stop")
+
+    assert captured["command"] == [
+        "systemctl", "disable", "--now", "stemcraft-server@survival.service",
+    ]
 
 
 def test_systemd_status_parses_properties_by_name(monkeypatch):

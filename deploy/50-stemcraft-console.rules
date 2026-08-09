@@ -7,4 +7,13 @@ polkit.addRule(function(action, subject) {
             return polkit.Result.YES;
         }
     }
+
+    // Enabling and disabling an instance uses systemd's unit-file API. Unlike
+    // manage-units, systemd does not expose the affected unit name to polkit
+    // for this action, so this permission must be granted at the service-user
+    // boundary. The stemcraft account is a locked, dedicated service account.
+    if (action.id == "org.freedesktop.systemd1.manage-unit-files" &&
+        subject.user == "stemcraft") {
+        return polkit.Result.YES;
+    }
 });
