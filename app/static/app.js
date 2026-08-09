@@ -4059,8 +4059,10 @@ async function loadOffsiteBackupSettings() {
       : data.reason === "not_installed"
         ? "rclone is not installed. Install it to enable off-site backups."
         : `Off-site backups are unavailable: ${data.error}`;
-    const options = document.getElementById("offsite-settings-remotes");
-    options.innerHTML = (data.remotes || []).map((remote) => `<option value="${escapeHtml(remote)}:"></option>`).join("");
+    const options = document.getElementById("offsite-test-remote");
+    const selectedRemote = options.value;
+    options.innerHTML = '<option value="">Choose a destination</option>' + (data.remotes || []).map((remote) => `<option value="${escapeHtml(remote)}">${escapeHtml(remote)}</option>`).join("");
+    if ((data.remotes || []).includes(selectedRemote)) options.value = selectedRemote;
     offsiteRemoteState = data.destinations || [];
     list.innerHTML = offsiteRemoteState.length ? offsiteRemoteState.map((remote) => `
       <div class="offsite-remote-row">
@@ -4136,23 +4138,28 @@ async function deleteOffsiteRemote(name) {
 }
 
 function testNamedOffsiteRemote(name) {
-  document.getElementById("offsite-test-destination").value = `${name}:`;
+  document.getElementById("offsite-test-remote").value = name;
+  document.getElementById("offsite-test-path").value = "";
   testOffsiteBackupDestination();
 }
 
 async function testOffsiteBackupDestination() {
-  const input = document.getElementById("offsite-test-destination");
-  const destination = input?.value.trim();
+  const remote = document.getElementById("offsite-test-remote")?.value;
+  const path = document.getElementById("offsite-test-path")?.value.trim() || "";
   const status = document.getElementById("offsite-test-status");
-  if (!destination) return alert("Enter a remote path first.");
+  if (!remote) return alert("Choose a destination first.");
   status.textContent = "Testing...";
-  const response = await fetch("/api/web/settings/offsite-backups/test", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ destination }),
-  });
-  const data = await response.json();
-  status.textContent = response.ok ? "Connection successful." : (data.error || "Connection failed.");
+  try {
+    const response = await fetch("/api/web/settings/offsite-backups/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ remote, path }),
+    });
+    const data = await response.json();
+    status.textContent = response.ok ? "Connection successful." : (data.error || "Connection failed.");
+  } catch (error) {
+    status.textContent = "Connection test could not be completed.";
+  }
 }
 
 loadOffsiteBackupSettings();

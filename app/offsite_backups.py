@@ -39,12 +39,13 @@ def _rclone_command(*args: str) -> list[str]:
     return command
 
 
-def _run_rclone(*args: str, input_text=None) -> subprocess.CompletedProcess:
+def _run_rclone(*args: str, input_text=None, timeout_seconds=None) -> subprocess.CompletedProcess:
     try:
         result = subprocess.run(
             _rclone_command(*args), capture_output=True, text=True, check=False,
             input=input_text,
-            timeout=max(30, int(os.getenv("STEMCRAFT_RCLONE_TIMEOUT_SECONDS", "3600"))),
+            timeout=(timeout_seconds if timeout_seconds is not None else
+                     max(30, int(os.getenv("STEMCRAFT_RCLONE_TIMEOUT_SECONDS", "3600")))),
         )
     except subprocess.TimeoutExpired as error:
         raise OffsiteBackupError("Off-site transfer timed out") from error
@@ -179,6 +180,15 @@ def validate_destination(destination: str, check_configured=True) -> str:
     return destination
 
 
+def destination_from_parts(remote: str, path: str = "") -> str:
+    """Build a destination from UI fields without treating path text as a remote."""
+    remote = remote.strip()
+    path = path.strip().strip("/")
+    if not _REMOTE_NAME.fullmatch(remote):
+        raise OffsiteBackupError("Choose a configured rclone destination")
+    return validate_destination(f"{remote}:{path}")
+
+
 def remote_backup_directory(destination: str, server) -> str:
     server_folder = Path(server.directory).resolve().name
     return f"{validate_destination(destination)}/{server_folder}"
@@ -195,7 +205,11 @@ def upload_backup(server, filename: str, destination: str) -> str:
 
 
 def test_destination(destination: str) -> None:
-    _run_rclone("lsd", validate_destination(destination), "--max-depth", "1")
+    _run_rclone(
+        "lsd", validate_destination(destination), "--max-depth", "1",
+        "--contimeout", "5s", "--timeout", "10s", "--retries", "1",
+        "--low-level-retries", "1", timeout_seconds=20,
+    )
 
 
 def enforce_remote_retention(server, destination: str, keep: int | None) -> list[str]:

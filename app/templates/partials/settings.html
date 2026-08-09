@@ -208,11 +208,15 @@
                 <strong id="offsite-settings-status">Checking...</strong>
             </div>
             <div id="offsite-remote-list" class="offsite-remote-list full-width"><div class="empty-message">Loading destinations...</div></div>
-            <label class="property-field full-width">
-                <span>Test remote path</span>
-                <input id="offsite-test-destination" list="offsite-settings-remotes" placeholder="b2:bucket/minecraft-backups">
-                <small>Test a configured destination, bucket or directory before adding it to a schedule.</small>
-                <datalist id="offsite-settings-remotes"></datalist>
+            <label class="property-field">
+                <span>Destination</span>
+                <select id="offsite-test-remote"><option value="">Choose a destination</option></select>
+                <small>Select one of the configured rclone destinations.</small>
+            </label>
+            <label class="property-field">
+                <span>Path (optional)</span>
+                <input id="offsite-test-path" placeholder="bucket/minecraft-backups">
+                <small>Enter only the bucket or directory path, without the destination name or colon.</small>
             </label>
             <div class="settings-save-row">
                 <span id="offsite-test-status" class="muted-small"></span>
