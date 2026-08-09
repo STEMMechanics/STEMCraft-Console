@@ -1932,6 +1932,13 @@ textarea.field-invalid {
   font-size: 54px;
 }
 
+.system-operation-spinner[hidden],
+.system-operation-failed-icon[hidden],
+.system-operation-note[hidden],
+#system-operation-close[hidden] {
+  display: none;
+}
+
 .system-operation-progress {
   height: 8px;
   margin: 24px 0 14px;
