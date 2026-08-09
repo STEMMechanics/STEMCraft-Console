@@ -4080,7 +4080,12 @@ function offsiteProviderName(backend) {
 function updateOffsiteRemoteFields() {
   const backend = document.getElementById("offsite-remote-backend")?.value;
   document.querySelectorAll("[data-offsite-provider]").forEach((fields) => {
-    fields.hidden = fields.dataset.offsiteProvider !== backend;
+    const active = fields.dataset.offsiteProvider === backend;
+    fields.hidden = !active;
+    fields.style.display = active ? "grid" : "none";
+    fields.querySelectorAll("input, select").forEach((control) => {
+      control.disabled = !active;
+    });
   });
 }
 
