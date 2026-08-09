@@ -40,6 +40,7 @@ from .web_servers import (
     get_accessible_server,
 )
 from .permissions import has_permission
+from .java_runtime import discover_java_runtimes, resolve_java_path
 
 
 router = APIRouter()
@@ -131,6 +132,11 @@ def properties_data(
             continue
         jar_files.append(path.name)
 
+    try:
+        selected_java_path = resolve_java_path(server.java_path)
+    except ValueError:
+        selected_java_path = server.java_path
+
     return {
         "properties":
             get_properties_view(server),
@@ -139,12 +145,15 @@ def properties_data(
             "max_memory": server.memory,
             "jar_name": server.jar_name,
             "java_args": server.java_args,
+            "java_path": selected_java_path,
+            "java_runtimes": discover_java_runtimes(),
             "jar_files": sorted(jar_files),
             "command": build_java_command(
                 server.memory,
                 server.jar_name,
                 server.java_args,
                 server.min_memory,
+                server.java_path,
             ),
         },
     }
@@ -194,6 +203,7 @@ async def save_properties_api(
         )
         jar_name = str(data.pop("jar_name", server.jar_name)).strip()
         java_args = str(data.pop("java_args", server.java_args)).strip()
+        java_path = resolve_java_path(data.pop("java_path", server.java_path))
 
         units = {"K": 1, "M": 1024, "G": 1024 * 1024}
         def memory_kib(value: str) -> int:
@@ -210,7 +220,7 @@ async def save_properties_api(
         error_field = "java_args"
         if len(java_args) > 1000:
             raise ValueError("Java startup options cannot exceed 1000 characters")
-        build_java_command(max_memory, jar_name, java_args, min_memory)
+        build_java_command(max_memory, jar_name, java_args, min_memory, java_path)
 
         error_field = None
         save_properties(
@@ -222,6 +232,7 @@ async def save_properties_api(
         server.memory = max_memory
         server.jar_name = jar_name
         server.java_args = java_args
+        server.java_path = java_path
 
         # Keep DB copy of port in sync.
         if "server_port" in data:

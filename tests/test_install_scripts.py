@@ -1,0 +1,38 @@
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_install_and_upgrade_put_helper_on_sudo_safe_path():
+    expected = 'install -m 0755 "$SOURCE_DIR/deploy/stemcraft-console" /usr/bin/stemcraft-console'
+
+    assert expected in (ROOT / "scripts/install.sh").read_text()
+    assert expected in (ROOT / "scripts/upgrade.sh").read_text()
+
+
+def test_uninstall_removes_current_and_legacy_helper_paths():
+    script = (ROOT / "scripts/uninstall.sh").read_text()
+
+    assert "rm -f /usr/bin/stemcraft-console /usr/local/sbin/stemcraft-console" in script
+
+
+def test_fresh_install_bind_prompt_and_fallback_share_all_interfaces_default():
+    script = (ROOT / "scripts/install.sh").read_text()
+
+    assert "DEFAULT_BIND_HOST=0.0.0.0" in script
+    assert 'BIND_HOST=${BIND_HOST:-${CONFIGURED_HOST:-$DEFAULT_BIND_HOST}}' in script
+    assert "Bind address [%s]:" in script
+    assert "then 0.0.0.0" in script
+
+
+def test_installer_preserves_existing_java_and_installs_only_selected_versions():
+    script = (ROOT / "scripts/install.sh").read_text()
+
+    assert "openjdk-21-jre" not in script
+    assert "java-21-openjdk" not in script
+    assert "--java-version" in script
+    assert "Java versions to install if missing" in script
+    assert 'java_major_installed "$version"' in script
+    assert '"java-$version-amazon-corretto-jdk"' in script
+    assert '"java-$version-amazon-corretto-devel"' in script

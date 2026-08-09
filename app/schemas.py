@@ -71,6 +71,7 @@ class ServerCreate(BaseModel):
     min_memory: str | None = None
     jar_name: str = Field(default="paper.jar", pattern=r"^[^/\\]+\.jar$")
     java_args: str = Field(default="", max_length=1000)
+    java_path: str = "java"
     process_backend: ProcessBackend = "systemd"
 
     port: int = Field(
@@ -139,6 +140,7 @@ class ServerOut(BaseModel):
     min_memory: str
     jar_name: str
     java_args: str
+    java_path: str
     process_backend: ProcessBackend
 
     port: int

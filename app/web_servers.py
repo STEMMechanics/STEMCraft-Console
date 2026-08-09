@@ -53,6 +53,7 @@ from .processes import (
 )
 from .server_import import detect_server_directories, inspect_server_directory
 from .server_deletion import delete_managed_server
+from .java_runtime import discover_java_runtimes, resolve_java_path, select_java_runtime
 from .permissions import has_permission
 
 from .web_context import (
@@ -270,6 +271,7 @@ def new_server_page(
 
         "versions":
             versions,
+        "java_runtimes": discover_java_runtimes(),
     })
 
 
@@ -289,6 +291,8 @@ def create_server_web(
     name: str = Form(),
 
     minecraft_version: str = Form(),
+
+    java_path: str = Form(default="java"),
 
     memory: str = Form(
         default="4G"
@@ -682,6 +686,8 @@ def create_server_web(
         if process_backend not in {"subprocess", "systemd"}:
             raise ValueError("Invalid process backend")
 
+        java_path = resolve_java_path(java_path)
+
         server = Server(
             name=name,
 
@@ -705,6 +711,8 @@ def create_server_web(
 
             process_backend=
                 process_backend,
+
+            java_path=java_path,
 
             port=
                 port,
@@ -956,6 +964,7 @@ def web_start_server(
             server.jar_name,
             server.java_args,
             server.min_memory,
+            server.java_path,
         )
 
 
@@ -1103,6 +1112,7 @@ def web_restart_server(
             server.jar_name,
             server.java_args,
             server.min_memory,
+            server.java_path,
         )
 
 
@@ -1486,6 +1496,7 @@ def import_server(
         jar_name=jar_name,
 
         process_backend=process_backend,
+        java_path=select_java_runtime(discover_java_runtimes(), None) or "java",
 
         port=port,
 

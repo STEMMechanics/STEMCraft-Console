@@ -372,6 +372,14 @@ async function updateSystemStats() {
       `${minecraft.running} running · ${minecraft.installed} installed`,
     );
     setText("minecraft-players", minecraft.players_online);
+    const javaList = document.getElementById("system-java-list");
+    if (javaList) {
+      javaList.innerHTML = (stats.java_runtimes || []).length
+        ? stats.java_runtimes.map((runtime) => `
+            <div class="system-instance-row"><div><strong>Java ${Number(runtime.major)}</strong>
+            <small>${escapeHtml(runtime.name)} · ${escapeHtml(runtime.path)}</small></div></div>`).join("")
+        : '<div class="empty-message">No Java runtimes detected.</div>';
+    }
     const instances = document.getElementById("system-instance-list");
     if (instances) {
       instances.innerHTML = minecraft.instances.length
@@ -384,7 +392,7 @@ async function updateSystemStats() {
         }</strong>
                       <small>Paper ${
           escapeHtml(server.version || "unknown")
-        } · ${server.players} online</small></div>
+        } · Java ${server.java || "unknown"} · ${server.players} online</small></div>
                       <button class="button ${
           server.running ? "danger" : "start"
         }" onclick="systemServerAction(${Number(server.id)}, '${
@@ -3017,6 +3025,16 @@ async function updatePropertiesPage() {
     setValue("property-max-memory", startup.max_memory || "2G");
     setValue("property-jar-name", startup.jar_name || "paper.jar");
     setValue("property-java-args", startup.java_args || "");
+    const javaSelect = document.getElementById("property-java-path");
+    if (javaSelect) {
+      javaSelect.replaceChildren(...(startup.java_runtimes || []).map((runtime) => {
+        const option = document.createElement("option");
+        option.value = runtime.path;
+        option.textContent = `Java ${runtime.major} · ${runtime.path}`;
+        option.selected = runtime.path === startup.java_path;
+        return option;
+      }));
+    }
 
     const jarList = document.getElementById("server-jar-files");
     if (jarList) {
@@ -3188,6 +3206,8 @@ async function saveServerProperties(
 
     java_args: valueOf("property-java-args"),
 
+    java_path: valueOf("property-java-path"),
+
     motd: valueOf(
       "property-motd",
     ),
@@ -3338,7 +3358,7 @@ function updateStartupCommandPreview() {
   const jar = valueOf("property-jar-name") || "paper.jar";
   const options = valueOf("property-java-args").trim();
   preview.textContent = [
-    "java",
+    valueOf("property-java-path") || "java",
     `-Xms${initial}`,
     `-Xmx${maximum}`,
     options,
