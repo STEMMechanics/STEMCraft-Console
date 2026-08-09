@@ -70,3 +70,37 @@ def test_missing_rclone_has_actionable_error(monkeypatch):
 
     with pytest.raises(OffsiteBackupError, match="not installed"):
         offsite_backups.configured_remotes(refresh=True)
+
+
+def test_website_can_create_and_update_b2_remote(monkeypatch, tmp_path):
+    monkeypatch.setenv("STEMCRAFT_RCLONE_CONFIG", str(tmp_path / "rclone.conf"))
+    monkeypatch.setattr(
+        offsite_backups, "_run_rclone",
+        lambda *args, input_text=None: completed("obscured-value\n"),
+    )
+
+    saved = offsite_backups.save_remote({
+        "name": "family-b2", "backend": "b2", "account": "key-id", "secret": "top-secret",
+    })
+
+    config_path = tmp_path / "rclone.conf"
+    assert saved == {"name": "family-b2", "type": "b2", "backend": "b2", "account": "key-id"}
+    assert "top-secret" not in config_path.read_text()
+    assert config_path.stat().st_mode & 0o777 == 0o600
+
+    offsite_backups.save_remote({
+        "name": "family-b2", "backend": "b2", "account": "new-key-id", "secret": "",
+    })
+    text = config_path.read_text()
+    assert "new-key-id" in text
+    assert "obscured-value" in text
+
+
+def test_website_can_remove_remote(monkeypatch, tmp_path):
+    config_path = tmp_path / "rclone.conf"
+    config_path.write_text("[old]\ntype = sftp\nhost = example.test\n")
+    monkeypatch.setenv("STEMCRAFT_RCLONE_CONFIG", str(config_path))
+
+    offsite_backups.delete_remote("old")
+
+    assert offsite_backups.remote_settings() == []

@@ -1139,6 +1139,10 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function escapeJsString(value) {
+  return escapeHtml(String(value).replaceAll("\\", "\\\\").replaceAll("'", "\\'"));
+}
+
 async function updateConsolePage() {
   const page = document.querySelector(
     ".console-page",
@@ -4040,6 +4044,8 @@ async function sendSMTPTest() {
 
 updateSMTPSettings();
 
+let offsiteRemoteState = [];
+
 async function loadOffsiteBackupSettings() {
   const status = document.getElementById("offsite-settings-status");
   if (!status) return;
@@ -4052,9 +4058,78 @@ async function loadOffsiteBackupSettings() {
       : data.error;
     const options = document.getElementById("offsite-settings-remotes");
     options.innerHTML = (data.remotes || []).map((remote) => `<option value="${escapeHtml(remote)}:"></option>`).join("");
+    offsiteRemoteState = data.destinations || [];
+    const list = document.getElementById("offsite-remote-list");
+    list.innerHTML = offsiteRemoteState.length ? offsiteRemoteState.map((remote) => `
+      <div class="offsite-remote-row">
+        <div><strong>${escapeHtml(remote.name)}</strong><small>${escapeHtml(offsiteProviderName(remote.backend))}${remote.host ? ` · ${escapeHtml(remote.user || "")}@${escapeHtml(remote.host)}` : ""}</small></div>
+        <div class="offsite-remote-actions"><button class="button" type="button" onclick="testNamedOffsiteRemote('${escapeJsString(remote.name)}')">Test</button>${["b2", "storj", "sftp"].includes(remote.backend) ? `<button class="button" type="button" onclick="openOffsiteRemoteModal('${escapeJsString(remote.name)}')">Edit</button>` : ""}<button class="button danger" type="button" onclick="deleteOffsiteRemote('${escapeJsString(remote.name)}')">Remove</button></div>
+      </div>`).join("") : '<div class="empty-message">No off-site destinations configured yet.</div>';
   } catch (error) {
     status.textContent = error.message;
   }
+}
+
+function offsiteProviderName(backend) {
+  return { b2: "Backblaze B2", storj: "Storj", sftp: "SFTP server" }[backend] || backend;
+}
+
+function updateOffsiteRemoteFields() {
+  const backend = document.getElementById("offsite-remote-backend")?.value;
+  document.querySelectorAll("[data-offsite-provider]").forEach((fields) => {
+    fields.hidden = fields.dataset.offsiteProvider !== backend;
+  });
+}
+
+function openOffsiteRemoteModal(name = "") {
+  const remote = offsiteRemoteState.find((item) => item.name === name);
+  document.getElementById("offsite-remote-name").value = remote?.name || "";
+  document.getElementById("offsite-remote-name").readOnly = Boolean(remote);
+  document.getElementById("offsite-remote-backend").value = remote?.backend || "b2";
+  document.getElementById("offsite-b2-account").value = remote?.account || "";
+  document.getElementById("offsite-b2-secret").value = "";
+  document.getElementById("offsite-storj-access").value = remote?.access_key_id || "";
+  document.getElementById("offsite-storj-secret").value = "";
+  document.getElementById("offsite-storj-endpoint").value = remote?.endpoint || "https://gateway.storjshare.io";
+  document.getElementById("offsite-sftp-host").value = remote?.host || "";
+  document.getElementById("offsite-sftp-port").value = remote?.port || "22";
+  document.getElementById("offsite-sftp-user").value = remote?.user || "";
+  document.getElementById("offsite-sftp-secret").value = "";
+  document.getElementById("offsite-remote-save-status").textContent = remote ? "Leave the secret blank to keep the saved value." : "";
+  updateOffsiteRemoteFields();
+  document.getElementById("offsite-remote-modal").hidden = false;
+}
+
+function closeOffsiteRemoteModal() {
+  document.getElementById("offsite-remote-modal").hidden = true;
+}
+
+async function saveOffsiteRemote() {
+  const backend = document.getElementById("offsite-remote-backend").value;
+  const payload = { name: document.getElementById("offsite-remote-name").value.trim(), backend };
+  if (backend === "b2") Object.assign(payload, { account: document.getElementById("offsite-b2-account").value.trim(), secret: document.getElementById("offsite-b2-secret").value });
+  if (backend === "storj") Object.assign(payload, { access_key: document.getElementById("offsite-storj-access").value.trim(), secret: document.getElementById("offsite-storj-secret").value, endpoint: document.getElementById("offsite-storj-endpoint").value.trim() });
+  if (backend === "sftp") Object.assign(payload, { host: document.getElementById("offsite-sftp-host").value.trim(), port: document.getElementById("offsite-sftp-port").value, user: document.getElementById("offsite-sftp-user").value.trim(), secret: document.getElementById("offsite-sftp-secret").value });
+  const status = document.getElementById("offsite-remote-save-status");
+  status.textContent = "Saving...";
+  const response = await fetch("/api/web/settings/offsite-backups/remotes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const data = await response.json();
+  if (!response.ok) return status.textContent = data.error || "Unable to save destination.";
+  closeOffsiteRemoteModal();
+  await loadOffsiteBackupSettings();
+}
+
+async function deleteOffsiteRemote(name) {
+  if (!confirm(`Remove the ${name} destination? Existing remote files will not be deleted.`)) return;
+  const response = await fetch(`/api/web/settings/offsite-backups/remotes/${encodeURIComponent(name)}`, { method: "DELETE" });
+  const data = await response.json();
+  if (!response.ok) return alert(data.error || "Unable to remove destination.");
+  loadOffsiteBackupSettings();
+}
+
+function testNamedOffsiteRemote(name) {
+  document.getElementById("offsite-test-destination").value = `${name}:`;
+  testOffsiteBackupDestination();
 }
 
 async function testOffsiteBackupDestination() {

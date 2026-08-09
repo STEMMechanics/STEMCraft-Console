@@ -301,15 +301,16 @@ The console is intended to provide the common administration tools required to o
 
 Scheduled backups can copy the completed local ZIP to any configured
 [rclone](https://rclone.org/) remote, including Backblaze B2, Storj, S3 and
-SFTP. Install rclone on the console server, create a configuration readable by
-the `stemcraft` service user, and optionally set its explicit path:
+SFTP. Install rclone on the console server, then add and test destinations from
+**Settings → Off-site Backups**. The panel writes credentials to a private
+service-owned configuration file; saved secrets are not returned to the browser.
+An explicit configuration location remains available for advanced deployments:
 
 ```env
 STEMCRAFT_RCLONE_CONFIG=/etc/stemcraft-console/rclone.conf
 ```
 
-Use **Settings → Off-site Backups** to verify that remotes are discovered and
-test a bucket or directory. A backup schedule accepts a destination such as
+Use Settings to test a bucket or directory. A backup schedule accepts a destination such as
 `b2:bucket/minecraft-backups` and maintains independent local and off-site
 retention counts. Local backup success is preserved if an upload fails; the run
 is shown with a warning so it can be retried or investigated.
