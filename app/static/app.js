@@ -3126,6 +3126,7 @@ async function saveOwnProfile() {
 
       body: JSON.stringify({
         username,
+        email,
         password,
       }),
     },
