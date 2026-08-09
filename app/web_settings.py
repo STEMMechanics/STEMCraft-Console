@@ -56,6 +56,12 @@ from .update_manager import (
     rollback_release,
 )
 from .service_restart import schedule_console_restart
+from .system_operation import (
+    begin_operation,
+    clear_operation,
+    current_operation,
+    update_operation,
+)
 
 router = APIRouter()
 
@@ -1139,15 +1145,33 @@ async def install_update(request: Request, db: Session = Depends(get_db)):
     if not has_permission(user, "system.manage"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
     data = await request.json()
+    rollback = data.get("action") == "rollback"
+    operation = begin_operation(
+        "rollback" if rollback else "update",
+        "Rolling back STEMCraft Console" if rollback else "Updating STEMCraft Console",
+        "Restoring the verified application backup." if rollback else "Downloading and verifying the selected release.",
+        "installing",
+    )
+    if operation is None:
+        return JSONResponse(
+            {"error": "A system update or restart is already in progress", "operation": current_operation()},
+            status_code=423,
+        )
     try:
-        if data.get("action") == "rollback":
+        if rollback:
             result = rollback_release(str(data.get("rollback_id", "")))
         else:
             result = install_release(str(data.get("tag", "")))
+        update_operation(
+            title="Restarting STEMCraft Console",
+            message="Waiting for the console service to return.",
+            phase="restarting",
+        )
         schedule_console_restart()
         result["restarting"] = True
         return result
     except Exception as error:
+        clear_operation()
         return JSONResponse({"error": str(error)}, status_code=400)
 
 
@@ -1158,8 +1182,28 @@ def restart_console(request: Request, db: Session = Depends(get_db)):
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
     if not has_permission(user, "system.manage"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
+    operation = begin_operation(
+        "restart",
+        "Restarting STEMCraft Console",
+        "The console service is restarting. Waiting for it to return.",
+        "restarting",
+    )
+    if operation is None:
+        return JSONResponse(
+            {"error": "A system update or restart is already in progress", "operation": current_operation()},
+            status_code=423,
+        )
     try:
         schedule_console_restart()
         return {"restarting": True}
     except Exception as error:
+        clear_operation()
         return JSONResponse({"error": str(error)}, status_code=400)
+
+
+@router.get("/api/web/settings/system-operation")
+def system_operation_status(request: Request, db: Session = Depends(get_db)):
+    user = current_web_user(request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return current_operation() or {"active": False}

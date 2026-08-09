@@ -166,6 +166,24 @@ function updateActiveNavigation() {
     });
 }
 
+function setMobileSidebar(open) {
+  const sidebar = document.getElementById("sidebar");
+  const backdrop = document.getElementById("sidebar-backdrop");
+  const toggle = document.querySelector(".mobile-menu-toggle");
+  sidebar?.classList.toggle("mobile-open", open);
+  backdrop?.classList.toggle("open", open);
+  document.body.classList.toggle("mobile-nav-open", open);
+  toggle?.setAttribute("aria-expanded", String(open));
+}
+
+function toggleMobileSidebar() {
+  setMobileSidebar(!document.getElementById("sidebar")?.classList.contains("mobile-open"));
+}
+
+function closeMobileSidebar() {
+  setMobileSidebar(false);
+}
+
 function normalizeButtonClasses() {
   document.querySelectorAll("button").forEach((button) =>
     button.classList.add("button")
@@ -265,6 +283,9 @@ function toggleServerMenu() {
 document.addEventListener(
   "click",
   function (event) {
+    if (event.target.closest("#sidebar a")) {
+      closeMobileSidebar();
+    }
     if (event.target.closest("#server-menu a")) {
       document
         .getElementById("server-menu")
@@ -291,6 +312,10 @@ document.addEventListener(
     }
   },
 );
+
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 900) closeMobileSidebar();
+});
 
 async function updateSystemStats() {
   const cpuValue = document.getElementById("cpu-value");
@@ -4604,6 +4629,130 @@ function formatConfiguredMemory(memory) {
 }
 
 let consoleUpdateTag = null;
+const SYSTEM_OPERATION_KEY = "stemcraftSystemOperation";
+let systemOperationActive = false;
+let localSystemOperation = false;
+let sharedSystemOperationSeen = false;
+
+function setSystemOperationState(title, message, phase = "working") {
+  const overlay = document.getElementById("system-operation-overlay");
+  if (!overlay) return;
+  document.getElementById("system-operation-title").textContent = title;
+  document.getElementById("system-operation-message").textContent = message;
+  overlay.dataset.phase = phase;
+  sessionStorage.setItem(SYSTEM_OPERATION_KEY, JSON.stringify({
+    title,
+    message,
+    phase,
+    startedAt: Date.now(),
+  }));
+}
+
+function beginSystemOperation(title, message, phase = "working", local = true) {
+  const overlay = document.getElementById("system-operation-overlay");
+  if (!overlay) return;
+  systemOperationActive = true;
+  localSystemOperation = local;
+  overlay.hidden = false;
+  overlay.classList.remove("failed");
+  document.getElementById("system-operation-spinner").hidden = false;
+  document.getElementById("system-operation-failed-icon").hidden = true;
+  document.getElementById("system-operation-close").hidden = true;
+  document.body.classList.add("system-operation-active");
+  const shell = document.querySelector(".app-shell");
+  if (shell) shell.inert = true;
+  setSystemOperationState(title, message, phase);
+}
+
+function failSystemOperation(message) {
+  const overlay = document.getElementById("system-operation-overlay");
+  if (!overlay) return;
+  systemOperationActive = false;
+  localSystemOperation = false;
+  sharedSystemOperationSeen = false;
+  sessionStorage.removeItem(SYSTEM_OPERATION_KEY);
+  overlay.classList.add("failed");
+  document.getElementById("system-operation-title").textContent = "Operation failed";
+  document.getElementById("system-operation-message").textContent = message;
+  document.getElementById("system-operation-spinner").hidden = true;
+  document.getElementById("system-operation-failed-icon").hidden = false;
+  document.getElementById("system-operation-close").hidden = false;
+  document.getElementById("system-operation-close").focus();
+}
+
+function closeSystemOperation() {
+  const overlay = document.getElementById("system-operation-overlay");
+  if (!overlay?.classList.contains("failed")) return;
+  overlay.hidden = true;
+  overlay.classList.remove("failed");
+  localSystemOperation = false;
+  document.body.classList.remove("system-operation-active");
+  const shell = document.querySelector(".app-shell");
+  if (shell) shell.inert = false;
+}
+
+window.addEventListener("beforeunload", (event) => {
+  if (!systemOperationActive) return;
+  event.preventDefault();
+  event.returnValue = "A system operation is still in progress.";
+});
+
+function resumeSystemOperation() {
+  const stored = sessionStorage.getItem(SYSTEM_OPERATION_KEY);
+  if (!stored) return;
+  try {
+    const operation = JSON.parse(stored);
+    beginSystemOperation(operation.title, operation.message, operation.phase, false);
+    if (operation.phase === "restarting") {
+      waitForConsoleRestart();
+    } else {
+      failSystemOperation(
+        "The page was reloaded before the update completed. Check the installed version and service logs before trying again.",
+      );
+    }
+  } catch {
+    sessionStorage.removeItem(SYSTEM_OPERATION_KEY);
+  }
+}
+
+async function pollSharedSystemOperation() {
+  try {
+    const response = await nativeFetch("/api/web/settings/system-operation", {
+      cache: "no-store",
+    });
+    if (!response.ok) return;
+    const operation = await response.json();
+    if (operation.active) {
+      sharedSystemOperationSeen = true;
+      if (!systemOperationActive) {
+        beginSystemOperation(
+          operation.title || "System operation in progress",
+          operation.message || "The console is temporarily locked.",
+          operation.phase || "working",
+          false,
+        );
+      } else if (!localSystemOperation) {
+        setSystemOperationState(
+          operation.title || "System operation in progress",
+          operation.message || "The console is temporarily locked.",
+          operation.phase || "working",
+        );
+      }
+      return;
+    }
+    if (sharedSystemOperationSeen && !localSystemOperation) {
+      sharedSystemOperationSeen = false;
+      systemOperationActive = false;
+      sessionStorage.removeItem(SYSTEM_OPERATION_KEY);
+      window.location.reload();
+    }
+  } catch {
+    // Connection failures are expected while the console service restarts.
+  }
+}
+
+window.setInterval(pollSharedSystemOperation, 1000);
+pollSharedSystemOperation();
 
 async function updateConsoleVersionStatus() {
   const status = document.getElementById(
@@ -4664,6 +4813,7 @@ async function updateConsoleVersionStatus() {
 }
 
 updateConsoleVersionStatus();
+resumeSystemOperation();
 
 async function upgradeConsole() {
   if (
@@ -4672,6 +4822,11 @@ async function upgradeConsole() {
       `Install ${consoleUpdateTag}? A verified backup will be created first.`,
     )
   ) return;
+  beginSystemOperation(
+    "Updating STEMCraft Console",
+    `Downloading and verifying ${consoleUpdateTag}. Do not close this page.`,
+    "installing",
+  );
   const button = document.getElementById("console-update-button");
   const status = document.getElementById("console-update-status");
   button.disabled = true;
@@ -4685,6 +4840,11 @@ async function upgradeConsole() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Update failed");
     status.textContent = "Installed; restarting console...";
+    setSystemOperationState(
+      "Restarting STEMCraft Console",
+      "The update is installed. Waiting for the console service to return...",
+      "restarting",
+    );
     if (data.rollback_id) {
       sessionStorage.setItem("consoleRollbackId", data.rollback_id);
       document.getElementById("console-rollback-button").hidden = false;
@@ -4694,6 +4854,7 @@ async function upgradeConsole() {
   } catch (error) {
     status.textContent = error.message;
     button.disabled = false;
+    failSystemOperation(error.message);
   }
 }
 
@@ -4712,6 +4873,8 @@ async function waitForConsoleRestart() {
         cache: "no-store",
       });
       if (response.ok) {
+        systemOperationActive = false;
+        sessionStorage.removeItem(SYSTEM_OPERATION_KEY);
         window.location.reload();
         return;
       }
@@ -4721,15 +4884,19 @@ async function waitForConsoleRestart() {
     await delay(1000);
   }
 
-  if (status) {
-    status.textContent = "Restart is taking longer than expected; refresh this page shortly";
-  }
-  const button = document.getElementById("console-restart-button");
-  if (button) button.disabled = false;
+  const message = "The console service did not return within 90 seconds. Check the service logs before trying again.";
+  if (status) status.textContent = message;
+  failSystemOperation(message);
 }
 
 async function restartConsoleService() {
   if (!confirm("Restart STEMCraft Console now?")) return;
+
+  beginSystemOperation(
+    "Restarting STEMCraft Console",
+    "Requesting a service restart. This page will reconnect automatically...",
+    "restarting",
+  );
 
   const button = document.getElementById("console-restart-button");
   const status = document.getElementById("console-update-status");
@@ -4746,6 +4913,7 @@ async function restartConsoleService() {
   } catch (error) {
     status.textContent = error.message;
     button.disabled = false;
+    failSystemOperation(error.message);
   }
 }
 
@@ -4932,6 +5100,11 @@ async function rollbackConsoleUpdate() {
     !rollbackId ||
     !confirm("Restore the application files from before this update?")
   ) return;
+  beginSystemOperation(
+    "Rolling back STEMCraft Console",
+    "Restoring the verified application backup. Do not close this page.",
+    "installing",
+  );
   const button = document.getElementById("console-rollback-button");
   const status = document.getElementById("console-update-status");
   button.disabled = true;
@@ -4945,12 +5118,18 @@ async function rollbackConsoleUpdate() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Rollback failed");
     status.textContent = "Previous version restored; restarting console...";
+    setSystemOperationState(
+      "Restarting STEMCraft Console",
+      "The previous version is restored. Waiting for the console service to return...",
+      "restarting",
+    );
     sessionStorage.removeItem("consoleRollbackId");
     button.hidden = true;
     await waitForConsoleRestart();
   } catch (error) {
     status.textContent = error.message;
     button.disabled = false;
+    failSystemOperation(error.message);
   }
 }
 
