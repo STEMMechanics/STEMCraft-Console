@@ -5387,7 +5387,7 @@ async function loadServerSchedules() {
       } · ${describeWhen(task)}</small></div>
             <button class="button" onclick="deleteServerSchedule(${
         Number(task.id)
-      })">Disable</button></div>`).join("")
+      })">Delete</button></div>`).join("")
         : `<div class="empty-message">No ${type} jobs yet.</div>`;
     };
     if (commandList) commandList.innerHTML = renderTasks("command");

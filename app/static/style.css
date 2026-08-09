@@ -458,7 +458,7 @@ button {
 
   border-radius: 9px;
 
-  background: #f6f7f8;
+  background: #fff;
 
   color: var(--text);
 
@@ -3066,6 +3066,8 @@ input[type="checkbox"] {
 .schedule-list,
 .schedule-runs {
   padding: 0 20px 20px;
+  background-color: #fff;
+  font-size: 12px;
 }
 
 .schedule-row,
@@ -3075,6 +3077,8 @@ input[type="checkbox"] {
   gap: 16px;
   padding: 12px 0;
   border-top: 1px solid var(--border);
+
+
 }
 
 .schedule-row small,
@@ -3109,6 +3113,7 @@ input[type="checkbox"] {
 
 .automation-page .schedule-list {
   padding: 0 14px;
+  background-color: #fff;
 }
 
 .automation-page .schedule-row {
@@ -3523,7 +3528,7 @@ input[type="checkbox"] {
 
 .ip-ban-list,
 .system-instance-list {
-  padding: 0 20px 20px;
+  padding: 0 20px;
 }
 
 .ip-ban-row,
