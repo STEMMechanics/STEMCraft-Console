@@ -25,6 +25,7 @@ from .models import Server, User
 from .processes import register_server, server_status
 from .player_manager import get_online_players
 from .permissions import has_permission
+from .java_runtime import discover_java_runtimes, resolve_java_path
 
 from .auth import (
     hash_password,
@@ -267,6 +268,8 @@ def web_system_stats(
         return JSONResponse({"error": "System view permission required"}, status_code=403)
 
     servers = db.query(Server).order_by(Server.name).all() if has_permission(user, "servers.view_all") else sorted(user.servers, key=lambda item: item.name.lower())
+    java_runtimes = discover_java_runtimes()
+    java_by_path = {runtime["path"]: runtime for runtime in java_runtimes}
     instances = []
     total_players = 0
     running_count = 0
@@ -281,9 +284,14 @@ def web_system_stats(
             players = 0
         running_count += int(running)
         total_players += players
+        try:
+            configured_java = resolve_java_path(server.java_path)
+        except ValueError:
+            configured_java = server.java_path
         instances.append({
             "id": server.id, "name": server.name, "version": server.minecraft_version,
             "running": running, "players": players,
+            "java": java_by_path.get(configured_java, {}).get("major"),
         })
 
     return {
@@ -322,6 +330,7 @@ def web_system_stats(
             "installed": len(instances), "running": running_count,
             "players_online": total_players, "instances": instances,
         },
+        "java_runtimes": java_runtimes,
     }
 
 @router.get(

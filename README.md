@@ -61,25 +61,43 @@ clone a trusted release checkout and run:
 sudo ./scripts/install.sh
 ```
 
-The installer installs Python, Java 21, polkit and supporting system packages.
+The installer installs Python, polkit and supporting system packages. It
+detects and preserves existing Java installations without adding or replacing
+older runtimes. Interactive installs ask which Java versions to add, and a
+blank response installs none. Automated installs add no Java by default; repeat
+`--java-version` to select one or more runtimes, for example
+`--java-version 21 --java-version 25`.
+Paper 26.1 and newer require Java 25, while older servers can retain their
+compatible runtime. Each server's Java executable can be selected during
+creation or from its Properties page, and the System page lists all detected
+runtimes.
+During the first startup after upgrading, legacy servers that did not have an
+explicit Java selection are assigned the installed runtime recommended for
+their recorded Minecraft version. Existing explicit selections are preserved.
 Use `--skip-packages` only when those dependencies have already been installed.
 It does not configure a firewall or reverse proxy.
 
 On a fresh interactive installation, it asks for the IP address and port the
-web service should bind to. Press Enter to keep `127.0.0.1:8000`. For unattended
+web service should bind to. Press Enter to keep `0.0.0.0:8000`, which listens on
+all network interfaces. For unattended
 installation, provide explicit values or accept the defaults:
 
 ```bash
-sudo ./scripts/install.sh --host 127.0.0.1 --port 8000 --non-interactive
+sudo ./scripts/install.sh --host 0.0.0.0 --port 8000 --non-interactive
 ```
+
+Use `--host 127.0.0.1` when the panel should only be reachable through a local
+reverse proxy. Repair installations retain the address already saved in
+`/etc/stemcraft-console/console.env`; pass `--host 0.0.0.0` explicitly to
+change an existing loopback-only installation.
 
 On a fresh installation it prints a generated password for the initial `admin`
 account exactly once. Only its one-way hash is stored in the database; the
 plaintext password is not written to `console.env`. The account must change the
 temporary password after signing in.
 
-The initial configuration permits its session cookie over HTTP because the
-panel starts on localhost before a reverse proxy is configured. Once HTTPS is
+The initial configuration permits its session cookie over HTTP until a reverse
+proxy is configured. Once HTTPS is
 working, set the following in `/etc/stemcraft-console/console.env` and restart
 the service:
 
@@ -122,6 +140,12 @@ sudo stemcraft-console reset-password admin
 sudo stemcraft-console server survival restart
 stemcraft-console server survival logs
 ```
+
+The helper is installed at `/usr/bin/stemcraft-console` so it remains
+available when `sudo` uses a restricted `secure_path`, including the default on
+Oracle Linux 8. Upgrading or rerunning the installer in repair mode adds this
+path to existing installations that only have the legacy
+`/usr/local/sbin/stemcraft-console` copy.
 
 The final example uses the server's systemd service name, which is configured
 when the server is created or imported in the panel.

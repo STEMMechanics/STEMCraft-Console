@@ -98,7 +98,7 @@ fi
 
 rm -f /etc/systemd/system/stemcraft-console.service /etc/systemd/system/stemcraft-server@.service
 rm -f /etc/polkit-1/rules.d/50-stemcraft-console.rules
-rm -f /usr/local/sbin/stemcraft-console
+rm -f /usr/bin/stemcraft-console /usr/local/sbin/stemcraft-console
 systemctl daemon-reload
 
 section "Removing application files"

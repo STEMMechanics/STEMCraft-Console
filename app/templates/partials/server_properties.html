@@ -77,6 +77,12 @@
                     <small>Optional JVM arguments inserted before <code>-jar</code>. RAM flags are managed above.</small>
                 </label>
 
+                <label class="property-field full-width">
+                    <span>Java Runtime</span>
+                    <select id="property-java-path" onchange="updateStartupCommandPreview()"></select>
+                    <small>The executable used for this server, including systemd-backed instances.</small>
+                </label>
+
                 <div class="property-field full-width startup-command-preview">
                     <span>Effective startup command</span>
                     <code id="startup-command-preview">java -Xms2G -Xmx2G -jar paper.jar --nogui</code>

@@ -208,6 +208,10 @@ class Server(Base):
         String(1000), nullable=False, default=""
     )
 
+    java_path = Column(
+        String(500), nullable=False, default="java"
+    )
+
     process_backend = Column(
         String(20), nullable=False, default="subprocess"
     )

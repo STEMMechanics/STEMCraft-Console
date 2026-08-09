@@ -35,6 +35,7 @@ class ServerProcessConfig:
     jar_name: str
     java_args: str
     min_memory: str = "2G"
+    java_path: str = "java"
 
 
 server_configs: dict[int, ServerProcessConfig] = {}
@@ -53,6 +54,7 @@ def register_server(server) -> None:
     server_configs[server.id] = ServerProcessConfig(
         backend, service_name, server.directory, server.memory,
         server.jar_name, server.java_args, server.min_memory,
+        getattr(server, "java_path", "java") or "java",
     )
 
 
@@ -162,6 +164,7 @@ def build_java_command(
     jar_name: str = "paper.jar",
     java_args: str = "",
     min_memory: str | None = None,
+    java_path: str = "java",
 ) -> list[str]:
     """Build a shell-free Java command from validated server settings."""
     maximum_memory = normalize_memory(memory, "Maximum RAM")
@@ -189,7 +192,7 @@ def build_java_command(
     _validate_java_args(extra_args)
 
     return [
-        "java", f"-Xms{initial_memory}", f"-Xmx{maximum_memory}",
+        java_path, f"-Xms{initial_memory}", f"-Xmx{maximum_memory}",
         *extra_args, "-jar", jar_name, "--nogui",
     ]
 
@@ -239,6 +242,7 @@ def start_server(
     jar_name: str = "paper.jar",
     java_args: str = "",
     min_memory: str | None = None,
+    java_path: str = "java",
 ):
     config = _systemd_config(server_id)
     if config:
@@ -262,7 +266,7 @@ def start_server(
         directory
     )
 
-    command = build_java_command(memory, jar_name, java_args, min_memory)
+    command = build_java_command(memory, jar_name, java_args, min_memory, java_path)
     try:
         resolve_server_jar(directory_path, jar_name)
     except ValueError as error:
@@ -367,6 +371,7 @@ def restart_server(
     jar_name: str = "paper.jar",
     java_args: str = "",
     min_memory: str | None = None,
+    java_path: str = "java",
 ):
     config = _systemd_config(server_id)
     if config:
@@ -404,6 +409,7 @@ def restart_server(
         jar_name,
         java_args,
         min_memory,
+        java_path,
     )
 
 

@@ -37,8 +37,10 @@
                     <span>Minecraft Version</span>
 
                     <select
+                        id="create-minecraft-version"
                         name="minecraft_version"
                         required
+                        onchange="selectRecommendedJava()"
                     >
 
                         {% for version in versions %}
@@ -132,6 +134,18 @@
                         <option value="subprocess">Development (panel-owned)</option>
                     </select>
                     <small>Use systemd on production Linux so Minecraft survives panel restarts.</small>
+                </label>
+
+                <label class="property-field">
+                    <span>Java Runtime</span>
+                    <select id="create-java-path" name="java_path" required>
+                        {% for runtime in java_runtimes %}
+                        <option value="{{ runtime.path }}" data-java-major="{{ runtime.major }}">Java {{ runtime.major }} · {{ runtime.path }}</option>
+                        {% else %}
+                        <option value="" disabled>No Java runtimes detected</option>
+                        {% endfor %}
+                    </select>
+                    <small>Select an installed runtime. Paper 26.1+ requires Java 25.</small>
                 </label>
 
             </div>
@@ -646,6 +660,22 @@ function updateCreateServerButton() {
         !eula.checked;
 }
 
+function selectRecommendedJava() {
+    const version = document.getElementById("create-minecraft-version")?.value || "";
+    const select = document.getElementById("create-java-path");
+    if (!select) return;
+    const numbers = (version.match(/\d+/g) || []).map(Number);
+    const major = (numbers[0] || 0) >= 26 ? 25
+        : (numbers[0] === 1 && (numbers[1] || 0) >= 20) ? 21
+        : (numbers[0] === 1 && (numbers[1] || 0) >= 17) ? 17
+        : (numbers[0] === 1 && (numbers[1] || 0) >= 12) ? 11 : 8;
+    const recommended = Array.from(select.options).find(
+        option => Number(option.dataset.javaMajor) === major
+    );
+    if (recommended) select.value = recommended.value;
+}
+
 updateCreateServerButton();
+selectRecommendedJava();
 
 </script>

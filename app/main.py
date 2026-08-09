@@ -183,7 +183,16 @@ def startup():
     db = SessionLocal()
     try:
         from .models import Server
-        for server in db.query(Server).all():
+        from .java_runtime import discover_java_runtimes, select_java_runtime
+        servers = db.query(Server).all()
+        runtimes = discover_java_runtimes()
+        for server in servers:
+            if not server.java_path or server.java_path == "java":
+                selected = select_java_runtime(runtimes, server.minecraft_version)
+                if selected:
+                    server.java_path = selected
+        db.commit()
+        for server in servers:
             register_server(server)
     finally:
         db.close()

@@ -198,6 +198,7 @@ def start(
             server.jar_name,
             server.java_args,
             server.min_memory,
+            server.java_path,
         )
 
         return {

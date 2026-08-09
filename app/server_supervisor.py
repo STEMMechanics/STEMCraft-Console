@@ -11,14 +11,14 @@ from pathlib import Path
 from .processes import build_java_command, resolve_server_jar
 
 
-def supervise(directory: str, socket_path: str, memory: str, min_memory: str, jar_name: str, java_args: str) -> int:
+def supervise(directory: str, socket_path: str, memory: str, min_memory: str, jar_name: str, java_args: str, java_path: str = "java") -> int:
     root = Path(directory).resolve()
     resolve_server_jar(root, jar_name)
     endpoint = Path(socket_path)
     endpoint.parent.mkdir(parents=True, exist_ok=True)
     endpoint.unlink(missing_ok=True)
     process = subprocess.Popen(
-        build_java_command(memory, jar_name, java_args, min_memory),
+        build_java_command(memory, jar_name, java_args, min_memory, java_path),
         cwd=root,
         stdin=subprocess.PIPE,
     )
@@ -72,6 +72,7 @@ def main() -> None:
     parser.add_argument("--min-memory", default="2G")
     parser.add_argument("--jar", default="paper.jar")
     parser.add_argument("--java-args", default="")
+    parser.add_argument("--java-path", default="java")
     options = parser.parse_args()
     if options.service_name:
         from .database import SessionLocal
@@ -89,12 +90,13 @@ def main() -> None:
             options.min_memory = server.min_memory
             options.jar = server.jar_name
             options.java_args = server.java_args
+            options.java_path = server.java_path
             options.socket = str(SYSTEMD_SOCKET_DIR / f"{server.service_name}.sock")
         finally:
             db.close()
     if not options.directory or not options.socket:
         parser.error("directory and socket are required")
-    raise SystemExit(supervise(options.directory, options.socket, options.memory, options.min_memory, options.jar, options.java_args))
+    raise SystemExit(supervise(options.directory, options.socket, options.memory, options.min_memory, options.jar, options.java_args, options.java_path))
 
 
 if __name__ == "__main__":

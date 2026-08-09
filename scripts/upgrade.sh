@@ -43,6 +43,9 @@ cp -R "$SOURCE_DIR/app" "$SOURCE_DIR/migrations" "$SOURCE_DIR/alembic.ini" "$SOU
 install -m 0644 "$SOURCE_DIR/deploy/stemcraft-console.service" /etc/systemd/system/stemcraft-console.service
 install -m 0644 "$SOURCE_DIR/deploy/stemcraft-server@.service" /etc/systemd/system/stemcraft-server@.service
 install -m 0644 "$SOURCE_DIR/deploy/50-stemcraft-console.rules" /etc/polkit-1/rules.d/50-stemcraft-console.rules
+# Backfill the portable command location on installations made before this
+# path was added. RHEL-family sudo secure_path values may omit /usr/local/sbin.
+install -m 0755 "$SOURCE_DIR/deploy/stemcraft-console" /usr/bin/stemcraft-console
 install -m 0755 "$SOURCE_DIR/deploy/stemcraft-console" /usr/local/sbin/stemcraft-console
 chown -R stemcraft:stemcraft "$INSTALL_DIR"
 systemctl daemon-reload

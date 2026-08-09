@@ -6,12 +6,15 @@ usage() {
 Usage: sudo ./scripts/install.sh [OPTIONS]
 
 Installs STEMCraft Console on Ubuntu or Oracle Linux. By default the installer
-uses apt or dnf to install Python 3.10+, Java 21, polkit and supporting tools.
+uses apt or dnf to install Python 3.10+, polkit and supporting tools. Java is
+installed only when selected interactively or with --java-version.
 
 Options:
-  --host ADDRESS     Bind address (default: prompted, then 127.0.0.1).
+  --host ADDRESS     Bind address (default: prompted, then 0.0.0.0).
   --port PORT        Web port from 1024 to 65535 (default: prompted, then 8000).
   --non-interactive  Accept defaults instead of prompting.
+  --java-version N   Install Java N if missing; repeat for multiple versions.
+                     Supported versions: 8, 11, 17, 21, 25.
   --skip-packages    Do not install operating-system packages.
   -h, --help         Show this help.
 EOF
@@ -19,8 +22,10 @@ EOF
 
 SKIP_PACKAGES=false
 NON_INTERACTIVE=false
+JAVA_VERSIONS=()
 BIND_HOST=
 WEB_PORT=
+DEFAULT_BIND_HOST=0.0.0.0
 INSTALL_ARGS=()
 while (($#)); do
   case "$1" in
@@ -31,6 +36,16 @@ while (($#)); do
     --non-interactive)
       NON_INTERACTIVE=true
       INSTALL_ARGS+=(--non-interactive)
+      ;;
+    --java-version)
+      [[ $# -ge 2 ]] || { echo "--java-version requires a version." >&2; exit 2; }
+      [[ "$2" =~ ^(8|11|17|21|25)$ ]] || {
+        echo "Unsupported Java version '$2'. Choose 8, 11, 17, 21, or 25." >&2
+        exit 2
+      }
+      JAVA_VERSIONS+=("$2")
+      INSTALL_ARGS+=(--java-version "$2")
+      shift
       ;;
     --host)
       [[ $# -ge 2 ]] || { echo "--host requires an address." >&2; exit 2; }
@@ -140,7 +155,7 @@ case "$OS_ID" in
     fi
     PACKAGE_MANAGER=apt
     PYTHON_BIN=python3
-    PACKAGES=(python3 python3-venv python3-pip openjdk-21-jre-headless policykit-1 ca-certificates curl)
+    PACKAGES=(python3 python3-venv python3-pip policykit-1 ca-certificates curl gnupg)
     ;;
   ol|oracle|oraclelinux)
     if ((OS_VERSION < 8)); then
@@ -149,7 +164,7 @@ case "$OS_ID" in
     fi
     PACKAGE_MANAGER=dnf
     PYTHON_BIN=python3.11
-    PACKAGES=(python3.11 python3.11-pip java-21-openjdk-headless polkit ca-certificates curl)
+    PACKAGES=(python3.11 python3.11-pip polkit ca-certificates curl)
     ;;
   *)
     echo "Unsupported distribution '$OS_ID'. Supported: Ubuntu and Oracle Linux." >&2
@@ -166,6 +181,65 @@ if [[ "$SKIP_PACKAGES" == false ]]; then
   else
     dnf install -y "${PACKAGES[@]}"
   fi
+fi
+
+java_major_installed() {
+  local wanted=$1 candidate output version
+  while IFS= read -r candidate; do
+    [[ -x "$candidate" ]] || continue
+    output=$("$candidate" -version 2>&1 | head -1 || true)
+    version=$(sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p' <<<"$output")
+    [[ "$version" == 1 ]] && version=$(sed -n 's/.*version "1\.\([0-9][0-9]*\).*/\1/p' <<<"$output")
+    [[ "$version" == "$wanted" ]] && return 0
+  done < <(find /usr/lib/jvm /usr/java /opt/java -type f -path '*/bin/java' 2>/dev/null; command -v java 2>/dev/null || true)
+  return 1
+}
+
+if [[ "$SKIP_PACKAGES" == false && ${#JAVA_VERSIONS[@]} -eq 0 && "$NON_INTERACTIVE" == false && -r /dev/tty ]]; then
+  answer=
+  printf 'Java versions to install if missing (8,11,17,21,25; blank for none): ' >/dev/tty
+  read -r answer </dev/tty || true
+  answer=${answer//,/ }
+  for version in $answer; do
+    [[ "$version" =~ ^(8|11|17|21|25)$ ]] || die "Unsupported Java version '$version'."
+    JAVA_VERSIONS+=("$version")
+  done
+fi
+
+JAVA_TO_INSTALL=()
+if [[ "$SKIP_PACKAGES" == false ]]; then
+  for version in "${JAVA_VERSIONS[@]}"; do
+    if java_major_installed "$version"; then
+      info "Java $version is already installed; preserving it."
+    elif [[ ! " ${JAVA_TO_INSTALL[*]} " == *" $version "* ]]; then
+      JAVA_TO_INSTALL+=("$version")
+    fi
+  done
+fi
+
+if (( ${#JAVA_TO_INSTALL[@]} )); then
+    section "Installing selected Java runtimes: ${JAVA_TO_INSTALL[*]}"
+    if [[ "$PACKAGE_MANAGER" == apt ]]; then
+      curl --fail --silent --show-error https://apt.corretto.aws/corretto.key |
+        gpg --dearmor --yes --output /usr/share/keyrings/corretto-keyring.gpg
+      echo 'deb [signed-by=/usr/share/keyrings/corretto-keyring.gpg] https://apt.corretto.aws stable main' \
+        > /etc/apt/sources.list.d/corretto.list
+      apt-get update
+      JAVA_PACKAGES=()
+      for version in "${JAVA_TO_INSTALL[@]}"; do
+        JAVA_PACKAGES+=("java-$version-amazon-corretto-jdk")
+      done
+      apt-get install -y --no-install-recommends "${JAVA_PACKAGES[@]}" libxi6 libxtst6 libxrender1
+    else
+      rpm --import https://yum.corretto.aws/corretto.key
+      curl --fail --silent --show-error --location \
+        https://yum.corretto.aws/corretto.repo --output /etc/yum.repos.d/corretto.repo
+      JAVA_PACKAGES=()
+      for version in "${JAVA_TO_INSTALL[@]}"; do
+        JAVA_PACKAGES+=("java-$version-amazon-corretto-devel")
+      done
+      dnf install -y "${JAVA_PACKAGES[@]}"
+    fi
 fi
 
 for command in "$PYTHON_BIN" systemctl useradd install cp runuser; do
@@ -219,12 +293,12 @@ else
   CONFIGURED_PORT=
 fi
 
-BIND_HOST=${BIND_HOST:-${CONFIGURED_HOST:-127.0.0.1}}
+BIND_HOST=${BIND_HOST:-${CONFIGURED_HOST:-$DEFAULT_BIND_HOST}}
 WEB_PORT=${WEB_PORT:-${CONFIGURED_PORT:-8000}}
 
 if [[ "$REPAIR_INSTALL" == false && "$NON_INTERACTIVE" == false && -r /dev/tty ]]; then
   answer=
-  printf 'Bind address [%s] (use 0.0.0.0 for all interfaces): ' "$BIND_HOST" >/dev/tty
+  printf 'Bind address [%s]: ' "$BIND_HOST" >/dev/tty
   read -r answer </dev/tty || true
   BIND_HOST=${answer:-$BIND_HOST}
   answer=
@@ -317,6 +391,11 @@ install -m 0644 "$SOURCE_DIR/deploy/stemcraft-console.service" /etc/systemd/syst
 install -m 0644 "$SOURCE_DIR/deploy/stemcraft-server@.service" /etc/systemd/system/stemcraft-server@.service
 install -d -m 0755 /etc/polkit-1/rules.d
 install -m 0644 "$SOURCE_DIR/deploy/50-stemcraft-console.rules" /etc/polkit-1/rules.d/50-stemcraft-console.rules
+# Oracle Linux and other RHEL-family systems commonly exclude
+# /usr/local/sbin from sudo's secure_path. Install the command in /usr/bin so
+# `sudo stemcraft-console ...` works consistently, while retaining the legacy
+# location for existing scripts that use its absolute path.
+install -m 0755 "$SOURCE_DIR/deploy/stemcraft-console" /usr/bin/stemcraft-console
 install -m 0755 "$SOURCE_DIR/deploy/stemcraft-console" /usr/local/sbin/stemcraft-console
 
 chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
