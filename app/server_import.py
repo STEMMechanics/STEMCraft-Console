@@ -161,13 +161,15 @@ def inspect_server_directory(
         except OSError as error:
             errors.append(f"Unable to read server.properties: {error}")
 
-    try:
-        port = int(properties.get("server-port", "25565"))
-        if not 1 <= port <= 65535:
-            raise ValueError
-    except ValueError:
-        port = 25565
-        errors.append("server.properties contains an invalid server-port")
+    port = None
+    if properties_path.is_file():
+        try:
+            port = int(properties.get("server-port", "25565"))
+            if not 1 <= port <= 65535:
+                raise ValueError
+        except ValueError:
+            port = None
+            errors.append("server.properties contains an invalid server-port")
 
     if not os.access(directory, os.R_OK | os.W_OK | os.X_OK):
         errors.append("The panel service account needs read, write, and traverse access to the directory")
@@ -204,7 +206,7 @@ def inspect_server_directory(
             f"Disabled external service {service['unit']} was detected; STEMCraft will use its own service"
         )
 
-    if not _port_available(port) and not (service and service["active"]):
+    if port is not None and not _port_available(port) and not (service and service["active"]):
         errors.append(f"Port {port} is already in use")
 
     try:
@@ -221,7 +223,7 @@ def inspect_server_directory(
     return {
         "name": directory.name,
         "directory": str(directory),
-        "jar_name": jar.name if jar else "paper.jar",
+        "jar_name": jar.name if jar else None,
         "port": port,
         "owner": owner,
         "checked_as": checked_as,

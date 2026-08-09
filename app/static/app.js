@@ -26,18 +26,24 @@ function normalizeButtonClasses() {
 
 normalizeButtonClasses();
 
-function resetImportInspection() {
-  const submit = document.getElementById("import-server-submit");
-  if (submit) submit.disabled = true;
-}
-
-async function inspectImportServer() {
+async function reviewServerImport() {
+  const form = document.getElementById("import-server-form");
   const directory = document.getElementById("import-server-directory");
   const backend = document.getElementById("import-process-backend");
+  const modal = document.getElementById("import-review-modal");
+  const title = document.getElementById("import-review-title");
+  const summary = document.getElementById("import-review-summary");
   const report = document.getElementById("import-inspection-report");
-  const submit = document.getElementById("import-server-submit");
+  const confirm = document.getElementById("confirm-import-server");
+  if (!form || !directory || !backend || !modal || !report || !confirm) return;
+  if (!directory.reportValidity()) return;
+
+  modal.hidden = false;
+  title.textContent = "Review server import";
+  summary.textContent = "Checking the server directory and management requirements…";
   report.textContent = "Inspecting server directory...";
-  submit.disabled = true;
+  confirm.hidden = true;
+  confirm.disabled = true;
 
   try {
     const response = await fetch("/api/web/servers/import/inspect", {
@@ -54,22 +60,52 @@ async function inspectImportServer() {
     if (data.name && !document.getElementById("import-server-name").value) {
       document.getElementById("import-server-name").value = data.name;
     }
-    const facts = data.jar_name
-      ? `<div class="import-server-facts"><span>JAR <strong>${escapeHtml(data.jar_name)}</strong></span><span>Port <strong>${Number(data.port)}</strong></span><span>Owner <strong>${escapeHtml(data.owner)}</strong></span><span>Checked as <strong>${escapeHtml(data.checked_as)}</strong></span><span>Service <strong>${escapeHtml(data.service?.unit || "None detected")}</strong></span></div>`
-      : "";
+    const factItems = [];
+    if (data.jar_name) {
+      factItems.push(`<span>JAR <strong>${escapeHtml(data.jar_name)}</strong></span>`);
+    }
+    if (Number.isInteger(data.port)) {
+      factItems.push(`<span>Port <strong>${data.port}</strong></span>`);
+    }
+    if (data.owner) {
+      factItems.push(`<span>Owner <strong>${escapeHtml(data.owner)}</strong></span>`);
+    }
+    if (data.checked_as) {
+      factItems.push(`<span>Checked as <strong>${escapeHtml(data.checked_as)}</strong></span>`);
+    }
+    factItems.push(`<span>Service <strong>${escapeHtml(data.service?.unit || "None detected")}</strong></span>`);
+    const facts = `<div class="import-server-facts">${factItems.join("")}</div>`;
     const errors = (data.errors || []).map((message) =>
       `<p class="import-check error"><i class="fa-solid fa-circle-xmark"></i> ${escapeHtml(message)}</p>`
     ).join("");
     const warnings = (data.warnings || []).map((message) =>
       `<p class="import-check warning"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(message)}</p>`
     ).join("");
-    report.innerHTML = facts + errors + warnings + (data.ready
-      ? '<p class="import-check success"><i class="fa-solid fa-circle-check"></i> Ready to import</p>'
-      : "");
-    submit.disabled = !data.ready;
+    report.innerHTML = facts + errors + warnings;
+    title.textContent = data.ready ? "Server found" : "Server cannot be imported";
+    summary.textContent = data.ready
+      ? "STEMCraft found this server and can manage it. Review the details before importing."
+      : "STEMCraft found the following issues. Resolve them before trying again.";
+    confirm.hidden = !data.ready;
+    confirm.disabled = !data.ready;
   } catch (error) {
+    title.textContent = "Unable to inspect server";
+    summary.textContent = "The server directory could not be checked.";
     report.textContent = error.message;
   }
+}
+
+function closeImportReviewModal() {
+  document.getElementById("import-review-modal").hidden = true;
+}
+
+function confirmServerImport() {
+  const form = document.getElementById("import-server-form");
+  const confirm = document.getElementById("confirm-import-server");
+  if (!form || !confirm || confirm.disabled) return;
+  confirm.disabled = true;
+  confirm.textContent = "Importing...";
+  form.requestSubmit();
 }
 
 function toggleServerMenu() {
@@ -81,6 +117,12 @@ function toggleServerMenu() {
 document.addEventListener(
   "click",
   function (event) {
+    if (event.target.closest("#server-menu a")) {
+      document
+        .getElementById("server-menu")
+        ?.classList.remove("open");
+    }
+
     const dropdown = document.querySelector(
       ".server-selector",
     );
@@ -4473,11 +4515,10 @@ function populatePaperBuilds(builds, installedBuild = null) {
 }
 
 function openDeleteServerModal() {
-  document.getElementById("delete-server-confirmation").value = "";
   document.getElementById("delete-server-files").checked = false;
   document.getElementById("delete-server-error").textContent = "";
   document.getElementById("delete-server-modal").hidden = false;
-  document.getElementById("delete-server-confirmation").focus();
+  document.getElementById("confirm-delete-server").focus();
 }
 
 function closeDeleteServerModal() {
@@ -4496,7 +4537,7 @@ async function confirmDeleteServer() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        confirmation: document.getElementById("delete-server-confirmation").value,
+        confirmed: true,
         delete_files: document.getElementById("delete-server-files").checked,
       }),
     });

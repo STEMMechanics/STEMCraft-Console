@@ -85,24 +85,29 @@ def test_delete_server_can_remove_managed_directory(db, tmp_path, monkeypatch):
     assert not server_path.exists()
 
 
-def test_delete_server_refuses_running_server(db, tmp_path, monkeypatch):
+def test_delete_server_stops_running_server_before_deleting(db, tmp_path, monkeypatch):
     server_root = tmp_path / "servers"
     server_path = server_root / "running"
     server_path.mkdir(parents=True)
     server = add_server(db, server_path)
     monkeypatch.setattr(server_deletion.processes, "register_server", lambda _server: None)
+    statuses = iter(({"running": True}, {"running": False}))
     monkeypatch.setattr(
-        server_deletion.processes,
-        "server_status",
-        lambda _server_id: {"running": True},
+        server_deletion.processes, "server_status", lambda _server_id: next(statuses),
+    )
+    stopped = []
+    monkeypatch.setattr(
+        server_deletion.processes, "stop_server", lambda server_id: stopped.append(server_id),
+    )
+    monkeypatch.setattr(server_deletion.processes, "unregister_server", lambda _id: None)
+
+    result = server_deletion.delete_managed_server(
+        db, server, delete_files=False, server_root=server_root,
     )
 
-    with pytest.raises(ValueError, match="Stop the server"):
-        server_deletion.delete_managed_server(
-            db, server, delete_files=False, server_root=server_root,
-        )
-
-    assert db.get(Server, server.id) is not None
+    assert result["deleted"] is True
+    assert stopped == [server.id]
+    assert db.get(Server, server.id) is None
 
 
 def test_delete_server_refuses_files_outside_managed_root(db, tmp_path, monkeypatch):

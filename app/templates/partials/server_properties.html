@@ -466,6 +466,12 @@
 
         <div class="properties-actions">
 
+            {% if user.role == "admin" %}
+            <button class="button danger server-delete-button" type="button" onclick="openDeleteServerModal()">
+                Delete Server
+            </button>
+            {% endif %}
+
             <span
                 id="properties-save-status"
                 class="muted-small"
@@ -480,28 +486,13 @@
     </form>
 
     {% if user.role == "admin" %}
-    <section class="overview-card property-section danger-zone">
-        <div class="card-header">Delete Server</div>
-        <div class="danger-zone-content">
-            <div>
-                <strong>Remove {{ server.name }} from STEMCraft Console</strong>
-                <p>The server must be stopped. Its directory is preserved unless you explicitly choose to delete it.</p>
-            </div>
-            <button class="button danger" type="button" onclick="openDeleteServerModal()">Delete Server</button>
-        </div>
-    </section>
-
     <div id="delete-server-modal" class="modal-backdrop" hidden>
         <div class="modal-card">
             <h2>Delete {{ server.name }}?</h2>
-            <p>This removes the server, access assignments, schedules, backup history, and performance history from the panel.</p>
+            <p>The server will be stopped, then removed from STEMCraft Console along with its access assignments, schedules, backup history, and performance history.</p>
             <label class="modal-checkbox">
                 <input id="delete-server-files" type="checkbox">
-                <span>Also permanently delete <code>{{ server.directory }}</code></span>
-            </label>
-            <label class="property-field">
-                <span>Type <strong>{{ server.name }}</strong> to confirm</span>
-                <input id="delete-server-confirmation" type="text" autocomplete="off">
+                <span>Also permanently delete all server data in <code>{{ server.directory }}</code></span>
             </label>
             <p id="delete-server-error" class="modal-note danger-text"></p>
             <div class="modal-actions">

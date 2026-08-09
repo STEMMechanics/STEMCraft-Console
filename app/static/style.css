@@ -891,22 +891,6 @@ button.start:hover {
   font-weight: 500;
 }
 
-.danger-zone {
-  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
-}
-
-.danger-zone-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.danger-zone-content p {
-  margin: 6px 0 0;
-  color: var(--muted);
-}
-
 /* SWITCH */
 
 .switch {
@@ -1920,6 +1904,10 @@ input[type="checkbox"] {
   padding-bottom: 20px;
 }
 
+.properties-actions .server-delete-button {
+  margin-right: auto;
+}
+
 .muted-small {
   color: var(--muted);
   font-size: 12px;
@@ -2824,12 +2812,20 @@ input[type="checkbox"] {
   grid-column: 1 / -1;
 }
 
+.import-server-actions {
+  justify-content: flex-end;
+}
+
 .import-inspection-report {
   display: grid;
   gap: 8px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.import-review-modal {
+  width: min(560px, 100%);
 }
 
 @media (max-width: 1100px) {
