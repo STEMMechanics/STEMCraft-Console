@@ -42,8 +42,13 @@ def test_clean_database_migrates_to_application_schema(monkeypatch, tmp_path):
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
         }
+        server_columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(servers)")
+        }
 
     assert {"users", "servers", "access_roles", "permissions", "role_permissions", "alembic_version"} <= tables
+    assert "min_memory" in server_columns
 
 
 def test_pre_020_users_are_migrated_to_single_built_in_roles(monkeypatch, tmp_path):

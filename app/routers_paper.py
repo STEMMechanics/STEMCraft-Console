@@ -197,6 +197,7 @@ def start(
             payload.memory,
             server.jar_name,
             server.java_args,
+            server.min_memory,
         )
 
         return {

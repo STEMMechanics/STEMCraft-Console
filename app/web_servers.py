@@ -698,6 +698,9 @@ def create_server_web(
             memory=
                 memory,
 
+            min_memory=
+                memory,
+
             process_backend=
                 process_backend,
 
@@ -950,6 +953,7 @@ def web_start_server(
             server.memory,
             server.jar_name,
             server.java_args,
+            server.min_memory,
         )
 
 
@@ -1096,6 +1100,7 @@ def web_restart_server(
             server.memory,
             server.jar_name,
             server.java_args,
+            server.min_memory,
         )
 
 
@@ -1473,6 +1478,8 @@ def import_server(
         paper_build=None,
 
         memory=memory,
+
+        min_memory=memory,
 
         jar_name=jar_name,
 

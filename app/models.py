@@ -194,6 +194,12 @@ class Server(Base):
         default="2G",
     )
 
+    min_memory = Column(
+        String(20),
+        nullable=False,
+        default="2G",
+    )
+
     jar_name = Column(
         String(255), nullable=False, default="paper.jar"
     )
