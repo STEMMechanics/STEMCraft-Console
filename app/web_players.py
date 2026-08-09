@@ -41,6 +41,7 @@ from .web_servers import (
     current_web_user,
     get_accessible_server,
 )
+from .permissions import has_permission
 
 
 router = APIRouter()
@@ -68,7 +69,7 @@ def players_page(
             "/login"
         )
 
-    if not server:
+    if not server or not has_permission(user, "players.view"):
         raise HTTPException(
             status_code=403,
             detail="Access denied",
@@ -128,6 +129,9 @@ def players_data(
             status_code=403,
         )
 
+    if not server or not has_permission(user, "players.view"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+
     return get_player_data(
         server
     )
@@ -155,7 +159,7 @@ async def whitelist_enabled(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "players.manage"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -211,7 +215,7 @@ async def player_action(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "players.manage"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -305,7 +309,7 @@ async def ip_ban_action(server_id: int, request: Request, db: Session = Depends(
     user, server = get_accessible_server(server_id, request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if not server:
+    if not server or not has_permission(user, "players.manage"):
         return JSONResponse({"error": "Access denied"}, status_code=403)
     data = await request.json()
     action = str(data.get("action", "")).strip()

@@ -110,8 +110,33 @@
     </section>
 
 
-    {% if user.role == "admin" %}
+    {% if user.can("roles.manage") %}
+    <section class="overview-card settings-section">
+        <div class="card-header">
+            <span>Roles</span>
+            <button class="settings-header-button" onclick="openAddRoleModal()">
+                <i class="fa-solid fa-plus"></i> Add Role
+            </button>
+        </div>
+        <div class="settings-user-list">
+            {% for role in roles %}
+            <div class="settings-user-row">
+                <div>
+                    <strong>{{ role.name }}</strong>
+                    <small>{{ role.users|length }} user{{ '' if role.users|length == 1 else 's' }} · {% if role.name == "Administrator" %}All permissions{% else %}{{ role.permissions|length }} permissions{% endif %}{% if role.system %} · Built in{% endif %}</small>
+                </div>
+                {% if role.name == "Administrator" %}
+                <span class="muted-small">Full access</span>
+                {% else %}
+                <button class="button" onclick="openEditRoleModal({{ role.id }})">Edit</button>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 
+    {% if user.can("users.manage") %}
     <section class="overview-card settings-section">
 
         <div class="card-header">
@@ -143,7 +168,7 @@
 
                     <small>
 
-                        {{ item.role | capitalize }}
+                        {{ item.role_name }}
 
                         {% if not item.enabled %}
                         · Disabled
@@ -172,7 +197,9 @@
 
     </section>
 
+    {% endif %}
 
+    {% if user.can("settings.manage") %}
     <section class="overview-card settings-section">
 
         <div class="card-header">
@@ -279,6 +306,9 @@
     </section>
 
 
+    {% endif %}
+
+    {% if user.can("system.view") or user.can("system.manage") %}
     <section class="overview-card settings-section">
 
         <div class="card-header">
@@ -355,7 +385,7 @@
                         Checking for updates...
                     </span>
 
-                    <button id="console-update-button" class="button" onclick="upgradeConsole()" hidden>
+                    {% if user.can("system.manage") %}<button id="console-update-button" class="button" onclick="upgradeConsole()" hidden>
                         Upgrade
                     </button>
 
@@ -366,6 +396,7 @@
                     <button id="console-restart-button" class="button" onclick="restartConsoleService()">
                         Restart Console
                     </button>
+                    {% endif %}
 
                 </div>
 
@@ -519,7 +550,46 @@
 </div>
 
 
-{% if user.role == "admin" %}
+{% if user.can("roles.manage") %}
+<!-- ROLE EDITOR -->
+<div id="role-modal" class="modal-backdrop" hidden>
+    <div class="modal-card settings-role-modal">
+        <h2 id="role-modal-title">Add Role</h2>
+        <input id="settings-role-id" type="hidden">
+        <label class="property-field">
+            <span>Role name</span>
+            <input id="settings-role-name" maxlength="64">
+        </label>
+        <label class="property-field">
+            <span>Description</span>
+            <input id="settings-role-description" maxlength="255">
+        </label>
+        <div class="role-permission-groups">
+            {% for group, permissions in permission_groups.items() %}
+            <fieldset class="role-permission-group">
+                <legend>{{ group }}</legend>
+                {% for key, label in permissions.items() %}
+                <label class="settings-server-row">
+                    <input class="settings-role-permission" type="checkbox" value="{{ key }}">
+                    <span><strong>{{ label }}</strong><small>{{ key }}</small></span>
+                </label>
+                {% endfor %}
+            </fieldset>
+            {% endfor %}
+        </div>
+        <div id="settings-role-error" class="login-error" hidden></div>
+        <div class="modal-actions">
+            <button id="delete-role-button" class="button danger" onclick="deleteSettingsRole()" hidden>Delete</button>
+            <div class="settings-modal-spacer"></div>
+            <button class="button" onclick="closeRoleModal()">Cancel</button>
+            <button class="button" onclick="saveSettingsRole()">Save</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+
+{% if user.can("users.manage") %}
 
 <!-- USER EDITOR -->
 
@@ -562,15 +632,11 @@
             <span>Role</span>
 
             <select id="settings-user-role" onchange="updateUserServerAccessVisibility()">
-
-                <option value="user">
-                    User
+                {% for role in roles %}
+                <option value="{{ role.id }}" data-role-name="{{ role.name }}" data-view-all="{{ 'true' if role.permissions|selectattr('key', 'equalto', 'servers.view_all')|list else 'false' }}">
+                    {{ role.name }}
                 </option>
-
-                <option value="admin">
-                    Admin
-                </option>
-
+                {% endfor %}
             </select>
 
         </label>

@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session
 
 from .auth import (
     hash_password,
-    require_admin,
+    require_users_manage,
 )
 
 from .database import get_db
 
-from .models import User
+from .models import AccessRole, User
 
 from .schemas import (
     UserCreate,
@@ -35,7 +35,7 @@ router = APIRouter(
 def list_users(
     db: Session = Depends(get_db),
     admin: User = Depends(
-        require_admin
+        require_users_manage
     ),
 ):
 
@@ -55,7 +55,7 @@ def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
     admin: User = Depends(
-        require_admin
+        require_users_manage
     ),
 ):
 
@@ -75,6 +75,10 @@ def create_user(
             detail="Username already exists",
         )
 
+    role = db.get(AccessRole, payload.role_id)
+    if not role:
+        raise HTTPException(status_code=400, detail="Invalid role")
+
     user = User(
         username=payload.username,
 
@@ -82,7 +86,8 @@ def create_user(
             payload.password
         ),
 
-        role=payload.role,
+        role="admin" if role.name == "Administrator" else "user",
+        role_id=role.id,
 
         enabled=True,
     )
@@ -103,7 +108,7 @@ def update_user(
     payload: UserUpdate,
     db: Session = Depends(get_db),
     admin: User = Depends(
-        require_admin
+        require_users_manage
     ),
 ):
 
@@ -121,7 +126,8 @@ def update_user(
 
     if (
         user.id == admin.id
-        and payload.role == "user"
+        and payload.role_id is not None
+        and payload.role_id != user.role_id
     ):
 
         raise HTTPException(
@@ -137,8 +143,12 @@ def update_user(
             )
         )
 
-    if payload.role is not None:
-        user.role = payload.role
+    if payload.role_id is not None:
+        role = db.get(AccessRole, payload.role_id)
+        if not role:
+            raise HTTPException(status_code=400, detail="Invalid role")
+        user.role_id = role.id
+        user.role = "admin" if role.name == "Administrator" else "user"
 
     if payload.enabled is not None:
         user.enabled = payload.enabled
@@ -157,7 +167,7 @@ def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
     admin: User = Depends(
-        require_admin
+        require_users_manage
     ),
 ):
 

@@ -35,6 +35,33 @@ user_server_access = Table(
 )
 
 
+role_permissions = Table(
+    "role_permissions",
+    Base.metadata,
+    Column("role_id", Integer, ForeignKey("access_roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", Integer, ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class Permission(Base):
+    __tablename__ = "permissions"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String(80), unique=True, nullable=False, index=True)
+    label = Column(String(160), nullable=False)
+
+
+class AccessRole(Base):
+    __tablename__ = "access_roles"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(64), unique=True, nullable=False, index=True)
+    description = Column(String(255), nullable=True)
+    system = Column(Boolean, nullable=False, default=False)
+    permissions = relationship("Permission", secondary=role_permissions, lazy="selectin")
+    users = relationship("User", back_populates="access_role")
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -58,6 +85,26 @@ class User(Base):
         nullable=False,
         default="user",
     )
+
+    role_id = Column(
+        Integer,
+        ForeignKey("access_roles.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+
+    access_role = relationship("AccessRole", back_populates="users")
+
+    def can(self, permission: str) -> bool:
+        if self.access_role is None:
+            return self.role == "admin"
+        if self.access_role.name == "Administrator":
+            return True
+        return any(item.key == permission for item in self.access_role.permissions)
+
+    @property
+    def role_name(self) -> str:
+        return self.access_role.name if self.access_role else self.role.capitalize()
 
     enabled = Column(
         Boolean,

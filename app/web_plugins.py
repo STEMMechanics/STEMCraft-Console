@@ -41,6 +41,7 @@ from .web_render import (
 from .web_servers import (
     get_accessible_server,
 )
+from .permissions import has_permission
 
 
 router = APIRouter()
@@ -51,7 +52,7 @@ async def upload_plugin(server_id: int, request: Request, plugin: UploadFile = F
     user, server = get_accessible_server(server_id, request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if not server or user.role != "admin":
+    if not server or not has_permission(user, "plugins.manage"):
         return JSONResponse({"error": "Administrator access required"}, status_code=403)
     filename = Path(plugin.filename or "").name
     try:
@@ -76,7 +77,7 @@ async def download_plugin(server_id: int, request: Request, db: Session = Depend
     user, server = get_accessible_server(server_id, request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    if not server or user.role != "admin":
+    if not server or not has_permission(user, "plugins.manage"):
         return JSONResponse({"error": "Administrator access required"}, status_code=403)
     data = await request.json()
     try:
@@ -111,7 +112,7 @@ def plugins_page(
             "/login"
         )
 
-    if not server:
+    if not server or not has_permission(user, "plugins.view"):
         raise HTTPException(
             status_code=403,
             detail="Access denied",
@@ -162,7 +163,7 @@ def plugins_data(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "plugins.view"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -203,7 +204,7 @@ async def plugin_action(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "plugins.manage"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,

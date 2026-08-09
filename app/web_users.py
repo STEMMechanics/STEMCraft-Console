@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 
 from .auth import hash_password
 from .database import get_db
-from .models import Server, User
+from .models import AccessRole, Server, User
+from .permissions import has_permission
 
 
 router = APIRouter()
@@ -62,7 +63,7 @@ def require_web_admin(
     if not user:
         return None
 
-    if user.role != "admin":
+    if not has_permission(user, "users.manage"):
         return None
 
     return user
@@ -98,6 +99,7 @@ def users_page(
         context={
             "user": admin,
             "users": users,
+            "roles": db.query(AccessRole).order_by(AccessRole.name).all(),
         },
     )
 
@@ -110,9 +112,7 @@ def create_user(
 
     password: str = Form(),
 
-    role: str = Form(
-        default="user"
-    ),
+    role_id: int = Form(),
 
     db: Session = Depends(get_db),
 ):
@@ -128,11 +128,9 @@ def create_user(
 
     username = username.strip()
 
-    if role not in (
-        "admin",
-        "user",
-    ):
-        role = "user"
+    role = db.get(AccessRole, role_id)
+    if not role:
+        return RedirectResponse("/users?error=role", status_code=303)
 
     existing = (
         db.query(User)
@@ -153,7 +151,8 @@ def create_user(
         password_hash=hash_password(
             password
         ),
-        role=role,
+        role="admin" if role.name == "Administrator" else "user",
+        role_id=role.id,
         enabled=True,
     )
 
@@ -217,6 +216,7 @@ def edit_user_page(
             "servers": servers,
             "assigned_ids":
                 assigned_ids,
+            "roles": db.query(AccessRole).order_by(AccessRole.name).all(),
         },
     )
 
@@ -231,7 +231,7 @@ def save_user(
 
     username: str = Form(),
 
-    role: str = Form(),
+    role_id: int = Form(),
 
     enabled: str | None = Form(
         default=None
@@ -282,14 +282,13 @@ def save_user(
             status_code=303,
         )
 
-    if role not in (
-        "admin",
-        "user",
-    ):
-        role = "user"
+    role = db.get(AccessRole, role_id)
+    if not role:
+        return RedirectResponse(f"/users/{user_id}?error=role", status_code=303)
 
     edit_user.username = username
-    edit_user.role = role
+    edit_user.role_id = role.id
+    edit_user.role = "admin" if role.name == "Administrator" else "user"
     edit_user.enabled = (
         enabled == "on"
     )

@@ -31,6 +31,7 @@ from .web_render import (
 from .web_servers import (
     get_accessible_server,
 )
+from .permissions import has_permission
 
 
 router = APIRouter()
@@ -59,7 +60,7 @@ def properties_page(
             "/login"
         )
 
-    if not server:
+    if not server or not has_permission(user, "servers.properties"):
         raise HTTPException(
             status_code=403,
             detail="Access denied",
@@ -108,7 +109,7 @@ def properties_data(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "servers.properties"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,
@@ -143,7 +144,7 @@ async def save_properties_api(
             status_code=401,
         )
 
-    if not server:
+    if not server or not has_permission(user, "servers.properties"):
         return JSONResponse(
             {"error": "Access denied"},
             status_code=403,

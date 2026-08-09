@@ -2168,6 +2168,44 @@ input[type="checkbox"] {
     100%);
 }
 
+.settings-role-modal {
+  width: min(720px, 100%);
+  max-height: min(860px, calc(100vh - 40px));
+  overflow-y: auto;
+}
+
+.role-permission-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.role-permission-group {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.role-permission-group legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.role-permission-group .settings-server-row {
+  align-items: flex-start;
+}
+
+.role-permission-group small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-family: monospace;
+}
+
 .settings-user-modal .property-field {
   margin-top: 16px;
 }
@@ -2670,6 +2708,13 @@ input[type="checkbox"] {
 
 .player-list {
   min-height: 76px;
+}
+
+.players-page[data-can-manage="false"] .player-actions,
+.players-page[data-can-manage="false"] .ip-ban-row button,
+.backups-page[data-can-manage="false"] .backup-actions button,
+.plugins-page[data-can-manage="false"] .plugin-actions button {
+  display: none;
 }
 
 .ip-ban-form,

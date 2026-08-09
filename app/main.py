@@ -67,6 +67,7 @@ from .web_properties import (
 from .web_settings import (
     router as web_settings_router,
 )
+from .web_roles import router as web_roles_router
 from .web_automation import router as web_automation_router
 from .automation import start_automation, stop_automation
 
@@ -156,6 +157,8 @@ app.include_router(
 app.include_router(
     web_settings_router
 )
+
+app.include_router(web_roles_router)
 
 app.include_router(web_automation_router)
 

@@ -23,6 +23,7 @@
 
         </div>
 
+        {% if user.can("servers.control") %}
         <button id="topbar-start" class="button start" onclick="serverAction('start')" style="display:none">
             Start
         </button>
@@ -34,6 +35,7 @@
         <button id="topbar-stop" class="button danger" onclick="serverAction('stop')">
             Stop
         </button>
+        {% endif %}
 
 
     </div>

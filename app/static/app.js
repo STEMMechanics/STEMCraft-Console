@@ -3198,6 +3198,97 @@ async function saveOwnProfile() {
   }
 }
 
+function selectedRolePermissions() {
+  return Array.from(document.querySelectorAll(".settings-role-permission:checked"))
+    .map((checkbox) => checkbox.value);
+}
+
+function setRolePermissions(keys) {
+  const selected = new Set(keys || []);
+  document.querySelectorAll(".settings-role-permission").forEach((checkbox) => {
+    checkbox.checked = selected.has(checkbox.value);
+  });
+}
+
+function clearRoleError() {
+  const error = document.getElementById("settings-role-error");
+  if (error) {
+    error.hidden = true;
+    error.textContent = "";
+  }
+}
+
+function openAddRoleModal() {
+  document.getElementById("role-modal-title").textContent = "Add Role";
+  document.getElementById("settings-role-id").value = "";
+  document.getElementById("settings-role-name").value = "";
+  document.getElementById("settings-role-description").value = "";
+  document.getElementById("delete-role-button").hidden = true;
+  setRolePermissions([]);
+  clearRoleError();
+  document.getElementById("role-modal").hidden = false;
+  document.getElementById("settings-role-name").focus();
+}
+
+async function openEditRoleModal(roleId) {
+  const response = await fetch(`/api/web/settings/roles/${roleId}`);
+  const data = await response.json();
+  if (!response.ok) {
+    alert(data.error || "Unable to load role");
+    return;
+  }
+  document.getElementById("role-modal-title").textContent = "Edit Role";
+  document.getElementById("settings-role-id").value = data.id;
+  document.getElementById("settings-role-name").value = data.name;
+  document.getElementById("settings-role-description").value = data.description;
+  document.getElementById("delete-role-button").hidden = data.system;
+  setRolePermissions(data.permissions);
+  clearRoleError();
+  document.getElementById("role-modal").hidden = false;
+}
+
+function closeRoleModal() {
+  document.getElementById("role-modal").hidden = true;
+}
+
+async function saveSettingsRole() {
+  const id = document.getElementById("settings-role-id").value;
+  const response = await fetch(
+    id ? `/api/web/settings/roles/${id}` : "/api/web/settings/roles",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: document.getElementById("settings-role-name").value.trim(),
+        description: document.getElementById("settings-role-description").value.trim(),
+        permissions: selectedRolePermissions(),
+      }),
+    },
+  );
+  const data = await response.json();
+  if (!response.ok) {
+    const error = document.getElementById("settings-role-error");
+    error.textContent = data.error || "Unable to save role";
+    error.hidden = false;
+    return;
+  }
+  window.location.reload();
+}
+
+async function deleteSettingsRole() {
+  const id = document.getElementById("settings-role-id").value;
+  if (!id || !window.confirm("Delete this role?")) return;
+  const response = await fetch(`/api/web/settings/roles/${id}`, { method: "DELETE" });
+  const data = await response.json();
+  if (!response.ok) {
+    const error = document.getElementById("settings-role-error");
+    error.textContent = data.error || "Unable to delete role";
+    error.hidden = false;
+    return;
+  }
+  window.location.reload();
+}
+
 function openAddUserModal() {
   document.getElementById(
     "user-modal-title",
@@ -3215,9 +3306,11 @@ function openAddUserModal() {
     "settings-user-password",
   ).value = "";
 
-  document.getElementById(
-    "settings-user-role",
-  ).value = "user";
+  const roleSelect = document.getElementById("settings-user-role");
+  const defaultRole = Array.from(roleSelect.options).find(
+    (option) => option.dataset.roleName === "User",
+  );
+  roleSelect.value = defaultRole?.value || roleSelect.options[0]?.value || "";
 
   document.getElementById(
     "settings-user-enabled",
@@ -3296,7 +3389,7 @@ async function openEditUserModal(
 
   document.getElementById(
     "settings-user-role",
-  ).value = data.role;
+  ).value = String(data.role_id);
 
   document.getElementById(
     "settings-user-enabled",
@@ -3348,9 +3441,8 @@ function closeUserModal() {
 }
 
 function updateUserServerAccessVisibility() {
-  const role = document.getElementById(
-    "settings-user-role",
-  )?.value;
+  const select = document.getElementById("settings-user-role");
+  const selected = select?.selectedOptions[0];
 
   const access = document.getElementById(
     "settings-server-access",
@@ -3360,7 +3452,7 @@ function updateUserServerAccessVisibility() {
     return;
   }
 
-  access.hidden = role === "admin";
+  access.hidden = selected?.dataset.viewAll === "true";
 }
 
 function selectedSettingsServers() {
@@ -3399,11 +3491,11 @@ async function saveSettingsUser() {
       )
       .value,
 
-    role: document
+    role_id: Number(document
       .getElementById(
         "settings-user-role",
       )
-      .value,
+      .value),
 
     enabled: document
       .getElementById(

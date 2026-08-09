@@ -27,7 +27,7 @@ Servers | STEMCraft Console
                 Servers
             </a>
 
-            {% if user.role == "admin" %}
+            {% if user.can("servers.create") %}
 
             <a href="/users">
                 Users
@@ -53,7 +53,7 @@ Servers | STEMCraft Console
                 </a>
 
                 <span class="role">
-                    {{ user.role }}
+                    {{ user.role_name }}
                 </span>
 
                 <a href="/logout">
@@ -79,7 +79,7 @@ Servers | STEMCraft Console
 
                 </div>
 
-                {% if user.role == "admin" %}
+                {% if user.can("servers.create") %}
 
                 <a
                     href="/servers/new"

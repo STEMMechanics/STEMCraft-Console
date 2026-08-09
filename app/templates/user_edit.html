@@ -49,7 +49,7 @@
                 {{ user.username }}
 
                 <span class="role">
-                    {{ user.role }}
+                    {{ user.role_name }}
                 </span>
 
             </div>
@@ -99,26 +99,10 @@
                         Role
                     </label>
 
-                    <select name="role">
-
-                        <option
-                            value="user"
-                            {% if edit_user.role == "user" %}
-                            selected
-                            {% endif %}
-                        >
-                            User
-                        </option>
-
-                        <option
-                            value="admin"
-                            {% if edit_user.role == "admin" %}
-                            selected
-                            {% endif %}
-                        >
-                            Admin
-                        </option>
-
+                    <select name="role_id">
+                        {% for role in roles %}
+                        <option value="{{ role.id }}" {% if edit_user.role_id == role.id %}selected{% endif %}>{{ role.name }}</option>
+                        {% endfor %}
                     </select>
 
 
@@ -146,7 +130,7 @@
             </div>
 
 
-            {% if edit_user.role == "user" %}
+            {% if not edit_user.can("servers.view_all") %}
 
             <div class="panel">
 

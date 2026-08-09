@@ -3,12 +3,16 @@ from sqlalchemy.orm import Session
 from .models import Server, User
 
 from .version import APP_VERSION
+from .permissions import has_permission
 
 def get_available_servers(
     db: Session,
     user: User,
 ):
-    if user.role == "admin":
+    if not has_permission(user, "servers.view"):
+        return []
+
+    if has_permission(user, "servers.view_all"):
         return (
             db.query(Server)
             .order_by(Server.name)

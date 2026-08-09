@@ -15,7 +15,7 @@
         </div>
 
 
-        <div class="files-toolbar-actions">
+        {% if user.can("files.manage") %}<div class="files-toolbar-actions">
 
             <button class="button" onclick="openNewFolderModal()">
                 <i class="fa-solid fa-folder-plus"></i>
@@ -30,7 +30,7 @@
                 <input id="file-upload" type="file" multiple onchange="uploadFiles(this.files)">
             </label>
 
-        </div>
+        </div>{% endif %}
 
     </div>
 
@@ -92,7 +92,7 @@
 
                 <i class="fa-regular fa-file file-document"></i>
 
-                {% if entry.editable %}
+                {% if entry.editable and user.can("files.manage") %}
 
                 <a href="/servers/{{ server.id }}/files/edit?path={{ entry.path }}"
                     hx-get="/servers/{{ server.id }}/files/edit?path={{ entry.path }}" hx-target="#page-content"
@@ -132,7 +132,7 @@
                 {% endif %}
 
 
-                <button class="file-action-button" onclick="openRenameModal(
+                {% if user.can("files.manage") %}<button class="file-action-button" onclick="openRenameModal(
                         '{{ entry.path | e }}',
                         '{{ entry.name | e }}'
                     )" title="Rename">
@@ -146,6 +146,7 @@
                     )" title="Delete">
                     <i class="fa-solid fa-trash"></i>
                 </button>
+                {% endif %}
 
             </div>
 

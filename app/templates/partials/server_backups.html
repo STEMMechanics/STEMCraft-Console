@@ -1,6 +1,7 @@
 <div
     class="backups-page"
     data-server-id="{{ server.id }}"
+    data-can-manage="{{ 'true' if user.can('backups.manage') else 'false' }}"
     data-page-title="Backups"
 >
 
@@ -18,12 +19,13 @@
         </div>
 
 
-        <button class="button"
+        {% if user.can("backups.manage") %}<button class="button"
             onclick="openCreateBackupModal()"
         >
             <i class="fa-solid fa-plus"></i>
             Create Backup
         </button>
+        {% endif %}
 
     </div>
 
@@ -77,7 +79,7 @@
 
     <section class="overview-card automation-card backup-automation-card">
       <div class="card-header"><span>Backup &amp; Command Automation</span></div>
-      {% if user.role == "admin" %}
+      {% if user.can("automation.manage") %}
       <form id="schedule-form" class="schedule-form" onsubmit="createServerSchedule(event)">
         <input name="name" maxlength="100" placeholder="Schedule name" required>
         <select name="task_type" onchange="toggleScheduleFields(this.value)"><option value="backup">Backup</option><option value="command">Console command</option></select>

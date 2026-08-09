@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 
 from .auth import (
     get_current_user,
-    require_admin,
+    require_servers_create,
+    require_servers_delete,
+    require_servers_properties,
+    require_users_manage,
 )
 
 from .database import get_db
@@ -20,6 +23,7 @@ from .models import (
 
 from .permissions import (
     get_server_for_user,
+    has_permission,
 )
 
 from .schemas import (
@@ -46,8 +50,10 @@ def list_servers(
         get_current_user
     ),
 ):
+    if not has_permission(user, "servers.view"):
+        raise HTTPException(status_code=403, detail="Server view permission required")
 
-    if user.role == "admin":
+    if has_permission(user, "servers.view_all"):
 
         return (
             db.query(Server)
@@ -73,6 +79,8 @@ def get_server(
         get_current_user
     ),
 ):
+    if not has_permission(user, "servers.view"):
+        raise HTTPException(status_code=403, detail="Server view permission required")
 
     return get_server_for_user(
         db,
@@ -90,7 +98,7 @@ def create_server(
     payload: ServerCreate,
     db: Session = Depends(get_db),
     admin: User = Depends(
-        require_admin
+        require_servers_create
     ),
 ):
 
@@ -129,7 +137,7 @@ def update_server(
     payload: ServerUpdate,
     db: Session = Depends(get_db),
     admin: User = Depends(
-        require_admin
+        require_servers_properties
     ),
 ):
 
@@ -171,7 +179,7 @@ def delete_server(
     server_id: int,
     db: Session = Depends(get_db),
     admin: User = Depends(
-        require_admin
+        require_servers_delete
     ),
 ):
 
@@ -199,7 +207,7 @@ def assign_server_access(
     payload: ServerAccessRequest,
     db: Session = Depends(get_db),
     admin: User = Depends(
-        require_admin
+        require_users_manage
     ),
 ):
 
@@ -227,7 +235,7 @@ def assign_server_access(
             detail="Server not found",
         )
 
-    if user.role == "admin":
+    if has_permission(user, "servers.view_all"):
 
         raise HTTPException(
             status_code=400,
@@ -252,7 +260,7 @@ def revoke_server_access(
     payload: ServerAccessRequest,
     db: Session = Depends(get_db),
     admin: User = Depends(
-        require_admin
+        require_users_manage
     ),
 ):
 
