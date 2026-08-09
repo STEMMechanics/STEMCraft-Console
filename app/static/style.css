@@ -2062,8 +2062,28 @@ body.system-operation-active {
 }
 
 select {
-  min-height: 40px;
-  padding: 8px 34px 8px 11px;
+  min-height: 46px;
+  padding: 11px 44px 11px 14px;
+  line-height: 1.35;
+}
+
+select:not([multiple]) {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%237a8089' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 15px center;
+  background-size: 12px 8px;
+  cursor: pointer;
+}
+
+select:not([multiple]):disabled {
+  cursor: not-allowed;
+  opacity: .7;
+}
+
+.property-field select {
+  height: 46px;
+  padding: 11px 38px 11px 11px;
 }
 input[type="checkbox"] {
   width: 18px;
@@ -3056,6 +3076,155 @@ input[type="checkbox"] {
   color: var(--muted);
 }
 
+.saved-schedules {
+  margin: 0 20px 20px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fafbfc;
+}
+
+.saved-schedules-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.saved-schedules-heading i {
+  color: var(--accent);
+}
+
+.automation-page .schedule-list {
+  padding: 0 14px;
+}
+
+.automation-page .schedule-row {
+  align-items: center;
+  border-top: 0;
+}
+
+.automation-page .schedule-row + .schedule-row {
+  border-top: 1px solid var(--border);
+}
+
+.automation-page .schedule-row strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.automation-page .schedule-row small {
+  display: inline-block;
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.automation-page .schedule-list > .empty-message {
+  padding: 18px 0;
+}
+
+.automation-page,
+.automation-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.friendly-schedule-form {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.friendly-schedule-form label,
+.schedule-when-fields label {
+  display: grid;
+  gap: 6px;
+}
+
+.friendly-schedule-form label > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.schedule-when-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.selected-schedule-summary,
+.schedule-preview {
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.selected-schedule-summary {
+  padding: 1px 2px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.selected-schedule-summary::before {
+  content: "\f017";
+  margin-right: 6px;
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+}
+
+.custom-schedule-modal {
+  width: min(680px, 100%);
+}
+
+.custom-schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 20px 0;
+}
+
+.custom-schedule-grid label,
+.custom-schedule-grid fieldset {
+  display: grid;
+  gap: 6px;
+}
+
+.custom-schedule-grid fieldset {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.custom-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.custom-weekdays label {
+  display: flex;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.schedule-preview {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
 /* Plugin installation */
 .plugin-install-options {
   display: grid;
@@ -3139,9 +3308,12 @@ input[type="checkbox"] {
 
 .plugin-config-picker select {
   width: 42px;
+  min-height: 40px;
+  height: 40px;
   padding: 8px;
   margin-left: -1px;
   appearance: none;
+  background-image: none;
   border-radius: 0 9px 9px 0;
   color: transparent;
   cursor: pointer;
@@ -3430,6 +3602,11 @@ input[type="checkbox"] {
   }
 
   .paper-management-body {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-when-fields,
+  .custom-schedule-grid {
     grid-template-columns: 1fr;
   }
 }

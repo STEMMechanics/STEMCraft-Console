@@ -77,22 +77,6 @@
 
     </section>
 
-    <section class="overview-card automation-card backup-automation-card">
-      <div class="card-header"><span>Backup &amp; Command Automation</span></div>
-      {% if user.can("automation.manage") %}
-      <form id="schedule-form" class="schedule-form" onsubmit="createServerSchedule(event)">
-        <input name="name" maxlength="100" placeholder="Schedule name" required>
-        <select name="task_type" onchange="toggleScheduleFields(this.value)"><option value="backup">Backup</option><option value="command">Console command</option></select>
-        <input name="interval_minutes" type="number" min="1" value="1440" aria-label="Interval in minutes" required>
-        <input name="retention_count" type="number" min="1" value="7" aria-label="Backups to retain">
-        <input name="command" maxlength="500" placeholder="Console command" hidden>
-        <button class="button" type="submit">Add schedule</button>
-      </form>
-      {% endif %}
-      <div id="schedule-list" class="schedule-list">Loading schedules...</div>
-      <div id="schedule-runs" class="schedule-runs"></div>
-    </section>
-
 </div>
 
 

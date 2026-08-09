@@ -1,13 +1,17 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from .database import get_db
 from .models import ScheduledTask, ServerMetric, TaskRun
 from .web_servers import get_accessible_server
 from .permissions import has_permission
+from .automation import next_task_run, validate_cron_expression
+from .web_context import build_web_context
+from .web_render import render_page
+from .config import SCHEDULE_TIMEZONE_NAME
 
 
 router = APIRouter()
@@ -17,10 +21,38 @@ def _task_json(task):
     return {
         "id": task.id, "name": task.name, "task_type": task.task_type,
         "command": task.command, "interval_minutes": task.interval_minutes,
+        "frequency": task.frequency, "run_hour": task.run_hour,
+        "run_weekday": task.run_weekday,
+        "cron_expression": task.cron_expression,
         "retention_count": task.retention_count, "enabled": task.enabled,
         "next_run_at": task.next_run_at.isoformat(),
         "last_run_at": task.last_run_at.isoformat() if task.last_run_at else None,
     }
+
+
+@router.get("/servers/{server_id}/scheduling", response_class=HTMLResponse)
+def automation_page(server_id: int, request: Request, db: Session = Depends(get_db)):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if not server or not (
+        has_permission(user, "automation.manage")
+        or has_permission(user, "backups.view")
+    ):
+        raise HTTPException(status_code=403, detail="Access denied")
+    context = build_web_context(db, user, active_server=server)
+    context.update({
+        "server": server,
+        "page_title": "Scheduling",
+        "active_page": "scheduling",
+        "schedule_timezone": SCHEDULE_TIMEZONE_NAME,
+    })
+    return render_page(request, "server_automation.html", "partials/server_automation.html", context)
+
+
+@router.get("/servers/{server_id}/automation")
+def old_automation_page(server_id: int):
+    return RedirectResponse(f"/servers/{server_id}/scheduling", status_code=301)
 
 
 @router.get("/api/web/servers/{server_id}/schedules")
@@ -54,11 +86,30 @@ async def create_schedule(server_id: int, request: Request, db: Session = Depend
     task_type = str(data.get("task_type", ""))
     name = str(data.get("name", "")).strip()
     command = str(data.get("command", "")).strip() or None
+    frequency = str(data.get("frequency", "")).strip()
+    cron_expression = str(data.get("cron_expression", "")).strip() or None
     try:
-        interval = int(data.get("interval_minutes", 0))
+        interval = int(data.get("interval_minutes", 0) or 0)
         retention = int(data["retention_count"]) if data.get("retention_count") else None
+        run_hour = int(data["run_hour"]) if data.get("run_hour") not in (None, "") else None
+        run_weekday = int(data["run_weekday"]) if data.get("run_weekday") not in (None, "") else None
     except (TypeError, ValueError):
         return JSONResponse({"error": "Invalid interval or retention"}, status_code=400)
+    if frequency in {"hourly", "daily", "weekly", "monthly", "custom"}:
+        interval = {"hourly": 60, "daily": 1440, "weekly": 10080, "monthly": 43200, "custom": 1}[frequency]
+    elif not frequency:
+        frequency = None
+    else:
+        return JSONResponse({"error": "Choose a valid schedule"}, status_code=400)
+    if frequency in {"daily", "weekly", "monthly"} and (run_hour is None or not 0 <= run_hour <= 23):
+        return JSONResponse({"error": "Choose an hour from 0 to 23"}, status_code=400)
+    if frequency == "weekly" and (run_weekday is None or not 0 <= run_weekday <= 6):
+        return JSONResponse({"error": "Choose a day of the week"}, status_code=400)
+    if frequency == "custom":
+        try:
+            validate_cron_expression(cron_expression or "")
+        except (TypeError, ValueError) as error:
+            return JSONResponse({"error": str(error)}, status_code=400)
     if task_type not in {"backup", "command"} or not name or interval < 1 or interval > 525600:
         return JSONResponse({"error": "Type, name and a positive interval are required"}, status_code=400)
     if task_type == "command" and not command:
@@ -70,8 +121,11 @@ async def create_schedule(server_id: int, request: Request, db: Session = Depend
     task = ScheduledTask(
         server_id=server.id, task_type=task_type, name=name[:100], command=command,
         interval_minutes=interval, retention_count=retention, enabled=True,
+        frequency=frequency, run_hour=run_hour, run_weekday=run_weekday,
+        cron_expression=cron_expression,
         next_run_at=datetime.utcnow() + timedelta(minutes=interval),
     )
+    task.next_run_at = next_task_run(task, datetime.utcnow())
     db.add(task)
     db.commit()
     db.refresh(task)

@@ -4598,12 +4598,11 @@ function formatUptime(value) {
   const days = Math.floor(totalSeconds / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
 
   if (days) return `${days}d ${hours}h ${minutes}m`;
   if (hours) return `${hours}h ${minutes}m`;
-  if (minutes) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
+  if (minutes) return `${minutes}m`;
+  return `${totalSeconds}s`;
 }
 
 function formatMemoryBytes(bytes) {
@@ -5137,7 +5136,7 @@ async function rollbackConsoleUpdate() {
 
 function automationPage() {
   return document.querySelector(
-    ".server-overview[data-server-id], .backups-page[data-server-id]",
+    ".server-overview[data-server-id], .automation-page[data-server-id]",
   );
 }
 
@@ -5218,9 +5217,11 @@ async function loadServerMetrics() {
 }
 
 async function loadServerSchedules() {
+  if (document.hidden) return;
   const page = automationPage();
-  const list = document.getElementById("schedule-list");
-  if (!page || !list) return;
+  const commandList = document.getElementById("command-schedule-list");
+  const backupList = document.getElementById("backup-schedule-list");
+  if (!page || (!commandList && !backupList)) return;
   try {
     const response = await fetch(
       `/api/web/servers/${page.dataset.serverId}/schedules`,
@@ -5228,40 +5229,139 @@ async function loadServerSchedules() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unable to load schedules");
     const tasks = (data.tasks || []).filter((task) => task.enabled);
-    list.innerHTML = tasks.length
-      ? tasks.map((task) => `
+    const taskNames = new Map((data.tasks || []).map((task) => [Number(task.id), task.name]));
+    const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const timezone = page.dataset.timezone || "server time";
+    const describeWhen = (task) => {
+      if (task.frequency === "hourly") return "Every hour";
+      const time = `${String(task.run_hour ?? 0).padStart(2, "0")}:00 ${timezone}`;
+      if (task.frequency === "daily") return `Every day at ${time}`;
+      if (task.frequency === "weekly") return `Every ${weekdays[task.run_weekday] || "week"} at ${time}`;
+      if (task.frequency === "monthly") return `The first day of every month at ${time}`;
+      if (task.frequency === "custom") return `Custom (${escapeHtml(task.cron_expression || "")}) · ${timezone}`;
+      return `Every ${task.interval_minutes} minutes`;
+    };
+    const renderTasks = (type) => {
+      const matches = tasks.filter((task) => task.task_type === type);
+      return matches.length ? matches.map((task) => `
             <div class="schedule-row"><div><strong>${
         escapeHtml(task.name)
       }</strong><br>
             <small>${
         task.task_type === "backup"
-          ? `Backup; keep ${task.retention_count || "all"}`
+          ? `Keep ${task.retention_count || "all"} backups`
           : escapeHtml(task.command)
-      } · every ${task.interval_minutes} minutes</small></div>
+      } · ${describeWhen(task)}</small></div>
             <button class="button" onclick="deleteServerSchedule(${
         Number(task.id)
       })">Disable</button></div>`).join("")
-      : '<div class="empty-message">No active schedules.</div>';
+        : `<div class="empty-message">No ${type} jobs yet.</div>`;
+    };
+    if (commandList) commandList.innerHTML = renderTasks("command");
+    if (backupList) backupList.innerHTML = renderTasks("backup");
     const runs = document.getElementById("schedule-runs");
-    runs.innerHTML = (data.runs || []).slice(0, 10).map((run) => `
+    const recentRuns = (data.runs || []).filter((run) => !(
+      run.task_type === "command" &&
+      run.status === "failed" &&
+      String(run.detail || "").toLowerCase().includes("server is not running")
+    )).slice(0, 10);
+    const activityTitle = (run) => {
+      const name = taskNames.get(Number(run.task_id));
+      if (run.task_type === "command" && run.status === "complete") {
+        return `Command ${name || "command"} sent`;
+      }
+      return `${run.task_type} ${run.status}`;
+    };
+    runs.innerHTML = recentRuns.length ? recentRuns.map((run) => `
             <div class="schedule-run"><span><strong>${
-      escapeHtml(run.task_type)
-    }</strong> ${escapeHtml(run.status)}</span>
+      escapeHtml(activityTitle(run))
+    }</strong></span>
             <small>${escapeHtml(run.detail || "")} · ${
       new Date(run.started_at).toLocaleString()
-    }</small></div>`).join("");
+    }</small></div>`).join("") : '<div class="empty-message">No recent activity yet.</div>';
   } catch (error) {
-    list.textContent = error.message;
+    if (commandList) commandList.textContent = error.message;
+    if (backupList) backupList.textContent = error.message;
   }
 }
 
-function toggleScheduleFields(type) {
-  const form = document.getElementById("schedule-form");
-  if (!form) return;
-  form.elements.command.hidden = type !== "command";
-  form.elements.command.required = type === "command";
-  form.elements.retention_count.hidden = type !== "backup";
+function updateScheduleWhen(select) {
+  const fields = select.closest(".schedule-when-fields");
+  if (!fields) return;
+  const summaries = {
+    hourly: "At the start of every hour",
+    daily: "Every day at 00:00",
+    weekly: "Every Sunday at 00:00",
+    monthly: "On the first day of every month at 00:00",
+  };
+  fields.querySelector("[name=run_hour]").value = "0";
+  fields.querySelector("[name=run_weekday]").value = "6";
+  const summary = fields.querySelector(".selected-schedule-summary");
+  if (select.value === "custom") {
+    openCustomSchedule(select);
+  } else {
+    fields.querySelector("[name=cron_expression]").value = "";
+    summary.textContent = `${summaries[select.value]} · ${automationPage()?.dataset.timezone || "server time"}`;
+  }
 }
+
+let customScheduleSelect = null;
+
+function customCronValue(id) {
+  return document.getElementById(id).value.trim();
+}
+
+function customWeekdayValue() {
+  const checked = [...document.querySelectorAll("#custom-cron-weekday input:checked")].map((item) => item.value);
+  return checked.length === 7 ? "*" : checked.join(",");
+}
+
+function updateCustomSchedulePreview() {
+  const expression = [customCronValue("custom-cron-minute"), customCronValue("custom-cron-hour"), customCronValue("custom-cron-monthday"), customCronValue("custom-cron-month"), customWeekdayValue()].join(" ");
+  document.getElementById("custom-cron-preview").textContent = expression;
+  document.getElementById("custom-cron-description").textContent = `Custom schedule in ${automationPage()?.dataset.timezone || "server time"}`;
+  return expression;
+}
+
+function openCustomSchedule(select) {
+  customScheduleSelect = select;
+  const saved = select.closest(".schedule-when-fields").querySelector("[name=cron_expression]").value;
+  if (saved) {
+    const [minute, hour, monthday, month, weekday] = saved.split(" ");
+    document.getElementById("custom-cron-minute").value = minute;
+    document.getElementById("custom-cron-hour").value = hour;
+    document.getElementById("custom-cron-monthday").value = monthday;
+    document.getElementById("custom-cron-month").value = month;
+    const selected = weekday === "*" ? null : new Set(weekday.split(","));
+    document.querySelectorAll("#custom-cron-weekday input").forEach((item) => item.checked = !selected || selected.has(item.value));
+  }
+  updateCustomSchedulePreview();
+  document.getElementById("custom-schedule-modal").hidden = false;
+}
+
+function closeCustomSchedule(keepCustom) {
+  document.getElementById("custom-schedule-modal").hidden = true;
+  if (!keepCustom && customScheduleSelect) {
+    const hidden = customScheduleSelect.closest(".schedule-when-fields").querySelector("[name=cron_expression]");
+    if (!hidden.value) {
+      customScheduleSelect.value = "hourly";
+      updateScheduleWhen(customScheduleSelect);
+    }
+  }
+  customScheduleSelect = null;
+}
+
+function saveCustomSchedule() {
+  if (!customScheduleSelect) return;
+  const expression = updateCustomSchedulePreview();
+  if (expression.split(" ").some((part) => !part)) return alert("Choose at least one day and complete every field.");
+  const fields = customScheduleSelect.closest(".schedule-when-fields");
+  fields.querySelector("[name=cron_expression]").value = expression;
+  fields.querySelector(".selected-schedule-summary").innerHTML = `Custom <code>${escapeHtml(expression)}</code> · ${escapeHtml(automationPage()?.dataset.timezone || "server time")}`;
+  closeCustomSchedule(true);
+}
+
+document.querySelectorAll("#custom-schedule-modal input").forEach((input) => input.addEventListener("input", updateCustomSchedulePreview));
 
 async function createServerSchedule(event) {
   event.preventDefault();
@@ -5279,7 +5379,7 @@ async function createServerSchedule(event) {
   const data = await response.json();
   if (!response.ok) return alert(data.error || "Unable to add schedule");
   form.reset();
-  toggleScheduleFields("backup");
+  updateScheduleWhen(form.elements.frequency);
   loadServerSchedules();
 }
 
@@ -5296,3 +5396,8 @@ async function deleteServerSchedule(taskId) {
 
 loadServerMetrics();
 loadServerSchedules();
+
+setInterval(loadServerSchedules, 10000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) loadServerSchedules();
+});

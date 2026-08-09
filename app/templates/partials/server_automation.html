@@ -1,0 +1,58 @@
+<div class="automation-page" data-server-id="{{ server.id }}" data-timezone="{{ schedule_timezone }}" data-page-title="Scheduling">
+  <div class="automation-panels">
+    <section class="overview-card automation-card">
+      <div class="card-header"><span><i class="fa-solid fa-terminal"></i> Commands</span></div>
+      {% if user.can("automation.manage") %}
+      <form class="friendly-schedule-form" onsubmit="createServerSchedule(event)">
+        <input type="hidden" name="task_type" value="command">
+        <label><span>Name this job</span><input name="name" maxlength="100" placeholder="Morning message" required></label>
+        <label><span>Command to run</span><input name="command" maxlength="500" placeholder="say Good morning!" required></label>
+        {% include "partials/schedule_when_fields.html" %}
+        <button class="button" type="submit">Schedule command</button>
+      </form>
+      {% endif %}
+      <div class="saved-schedules">
+        <div class="saved-schedules-heading"><i class="fa-solid fa-calendar-check"></i><span>Scheduled commands</span></div>
+        <div id="command-schedule-list" class="schedule-list">Loading commands...</div>
+      </div>
+    </section>
+
+    <section class="overview-card automation-card">
+      <div class="card-header"><span><i class="fa-solid fa-box-archive"></i> Backups</span></div>
+      {% if user.can("automation.manage") %}
+      <form class="friendly-schedule-form" onsubmit="createServerSchedule(event)">
+        <input type="hidden" name="task_type" value="backup">
+        <label><span>Name this job</span><input name="name" maxlength="100" placeholder="Daily backup" required></label>
+        {% include "partials/schedule_when_fields.html" %}
+        <label><span>How many backups should we keep?</span><input name="retention_count" type="number" min="1" max="10000" value="7" required></label>
+        <button class="button" type="submit">Schedule backup</button>
+      </form>
+      {% endif %}
+      <div class="saved-schedules">
+        <div class="saved-schedules-heading"><i class="fa-solid fa-calendar-check"></i><span>Scheduled backups</span></div>
+        <div id="backup-schedule-list" class="schedule-list">Loading backups...</div>
+      </div>
+    </section>
+  </div>
+
+  <section class="overview-card automation-card">
+    <div class="card-header"><span>Recent activity</span></div>
+    <div id="schedule-runs" class="schedule-runs"></div>
+  </section>
+</div>
+
+<div id="custom-schedule-modal" class="modal-backdrop" hidden>
+  <div class="modal-card custom-schedule-modal" role="dialog" aria-modal="true" aria-labelledby="custom-schedule-title">
+    <h2 id="custom-schedule-title">Create a custom schedule</h2>
+    <p>Choose exactly when this job should run. Use commas for more than one value.</p>
+    <div class="custom-schedule-grid">
+      <label><span>Minutes (0–59)</span><input id="custom-cron-minute" value="0" placeholder="0 or 0,30" oninput="updateCustomSchedulePreview()"></label>
+      <label><span>Hours (0–23)</span><input id="custom-cron-hour" value="4" placeholder="4 or 4,16" oninput="updateCustomSchedulePreview()"></label>
+      <label><span>Days of month</span><input id="custom-cron-monthday" value="*" placeholder="* or 1,15" oninput="updateCustomSchedulePreview()"></label>
+      <label><span>Months</span><input id="custom-cron-month" value="*" placeholder="* or 1,6,12" oninput="updateCustomSchedulePreview()"></label>
+      <fieldset><legend>Days of week</legend><div class="custom-weekdays" id="custom-cron-weekday">{% for value, day in [(0, 'Sun'), (1, 'Mon'), (2, 'Tue'), (3, 'Wed'), (4, 'Thu'), (5, 'Fri'), (6, 'Sat')] %}<label><input type="checkbox" value="{{ value }}" checked onchange="updateCustomSchedulePreview()"> {{ day }}</label>{% endfor %}</div></fieldset>
+    </div>
+    <div class="schedule-preview"><strong>Schedule preview</strong><code id="custom-cron-preview">0 4 * * *</code><span id="custom-cron-description">Every day at 04:00 ({{ schedule_timezone }})</span></div>
+    <div class="modal-actions"><button class="button" type="button" onclick="closeCustomSchedule(false)">Cancel</button><button class="button" type="button" onclick="saveCustomSchedule()">Done</button></div>
+  </div>
+</div>

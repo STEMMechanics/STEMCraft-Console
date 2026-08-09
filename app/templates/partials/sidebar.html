@@ -202,6 +202,14 @@
         </a>
         {% endif %}
 
+        {% if user.can("automation.manage") or user.can("backups.view") %}
+        <a href="/servers/{{ active_server.id }}/scheduling" class="nav-link"
+            hx-get="/servers/{{ active_server.id }}/scheduling" hx-target="#page-content" hx-push-url="true">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            Scheduling
+        </a>
+        {% endif %}
+
         {% if user.can("servers.properties") %}
         <a
             href="/servers/{{ active_server.id }}/properties"
