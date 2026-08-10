@@ -20,6 +20,8 @@ from .offsite_backups import OffsiteBackupError, enforce_remote_retention, uploa
 
 _stop = threading.Event()
 _thread: threading.Thread | None = None
+_manual_task_lock = threading.Lock()
+_manual_backup_servers: set[int] = set()
 logger = logging.getLogger(__name__)
 POLL_SECONDS = max(5, int(os.getenv("STEMCRAFT_AUTOMATION_POLL_SECONDS", "30")))
 METRIC_SECONDS = max(15, int(os.getenv("STEMCRAFT_METRIC_INTERVAL_SECONDS", "60")))
@@ -217,15 +219,42 @@ def execute_task(task_id: int, *, reschedule: bool = True) -> None:
         db.close()
 
 
-def start_task_now(task_id: int) -> None:
+def _run_manual_task(task_id: int, backup_server_id: int | None) -> None:
+    try:
+        execute_task(task_id, reschedule=False)
+    finally:
+        if backup_server_id is not None:
+            with _manual_task_lock:
+                _manual_backup_servers.discard(backup_server_id)
+
+
+def manual_backup_starting(server_id: int) -> bool:
+    with _manual_task_lock:
+        return server_id in _manual_backup_servers
+
+
+def start_task_now(task_id: int, *, backup_server_id: int | None = None) -> bool:
     """Run a task outside the scheduler without moving its next due time."""
-    threading.Thread(
-        target=execute_task,
+    if backup_server_id is not None:
+        with _manual_task_lock:
+            if backup_server_id in _manual_backup_servers:
+                return False
+            _manual_backup_servers.add(backup_server_id)
+    thread = threading.Thread(
+        target=_run_manual_task,
         args=(task_id,),
-        kwargs={"reschedule": False},
+        kwargs={"backup_server_id": backup_server_id},
         daemon=True,
         name=f"scheduled-task-{task_id}",
-    ).start()
+    )
+    try:
+        thread.start()
+    except Exception:
+        if backup_server_id is not None:
+            with _manual_task_lock:
+                _manual_backup_servers.discard(backup_server_id)
+        raise
+    return True
 
 
 def collect_metrics() -> None:

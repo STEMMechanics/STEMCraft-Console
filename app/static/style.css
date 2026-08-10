@@ -4211,6 +4211,10 @@ input[type="checkbox"] {
   display: none;
 }
 
+.scheduled-backup-progress {
+  padding: 0 20px;
+}
+
 .scheduled-backup-job {
   margin: 16px 0 0;
   padding: 14px;
@@ -4246,4 +4250,34 @@ input[type="checkbox"] {
 
 #schedule-runs-page-label {
   font-size: 12px;
+}
+
+/* Keep disabled controls visibly and behaviorally inert across every variant. */
+button:disabled,
+.button:disabled,
+button[aria-disabled="true"],
+.button[aria-disabled="true"] {
+  border-color: var(--border) !important;
+  background: #f1f2f4 !important;
+  color: var(--muted) !important;
+  opacity: .58 !important;
+  box-shadow: none !important;
+  filter: grayscale(.35);
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+button:disabled:hover,
+.button:disabled:hover,
+button:disabled:focus,
+.button:disabled:focus,
+button[aria-disabled="true"]:hover,
+.button[aria-disabled="true"]:hover,
+button[aria-disabled="true"]:focus,
+.button[aria-disabled="true"]:focus {
+  border-color: var(--border) !important;
+  background: #f1f2f4 !important;
+  color: var(--muted) !important;
+  box-shadow: none !important;
+  transform: none !important;
 }

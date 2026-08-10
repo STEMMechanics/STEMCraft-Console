@@ -9,7 +9,7 @@ from .database import get_db
 from .models import BackupJob, ScheduledTask, ServerMetric, TaskRun
 from .web_servers import get_accessible_server
 from .permissions import has_permission
-from .automation import next_task_run, start_task_now, validate_cron_expression
+from .automation import manual_backup_starting, next_task_run, start_task_now, validate_cron_expression
 from .web_context import build_web_context
 from .web_render import render_page
 from .config import SCHEDULE_TIMEZONE_NAME
@@ -29,6 +29,18 @@ def _utc_iso(value: datetime | None) -> str | None:
 
 
 def _task_json(task):
+    backup_jobs = [{
+        "id": job.id, "status": job.status, "progress": job.progress,
+        "message": job.message, "label": job.label,
+    } for job in db.query(BackupJob).filter(
+        BackupJob.server_id == server.id,
+        BackupJob.status.in_(["queued", "saving", "archiving", "uploading"]),
+    ).order_by(BackupJob.id.desc()).all()]
+    if not backup_jobs and manual_backup_starting(server.id):
+        backup_jobs.append({
+            "id": None, "status": "queued", "progress": 0,
+            "message": "Starting scheduled backup", "label": "Scheduled backup",
+        })
     return {
         "id": task.id, "name": task.name, "task_type": task.task_type,
         "command": task.command, "interval_minutes": task.interval_minutes,
@@ -154,13 +166,7 @@ def schedules(server_id: int, request: Request, runs_page: int = 1, runs_per_pag
         "runs_pagination": {"page": runs_page, "pages": runs_pages, "total": runs_total},
         "offsite_remotes": remotes,
         "offsite_error": remote_error,
-        "backup_jobs": [{
-            "id": job.id, "status": job.status, "progress": job.progress,
-            "message": job.message, "label": job.label,
-        } for job in db.query(BackupJob).filter(
-            BackupJob.server_id == server.id,
-            BackupJob.status.in_(["queued", "saving", "archiving", "uploading"]),
-        ).order_by(BackupJob.id.desc()).all()],
+        "backup_jobs": backup_jobs,
     }
 
 
@@ -222,7 +228,8 @@ def run_schedule_now(server_id: int, task_id: int, request: Request, db: Session
     ).first()
     if existing:
         return JSONResponse({"error": "A backup is already running"}, status_code=409)
-    start_task_now(task.id)
+    if not start_task_now(task.id, backup_server_id=server.id):
+        return JSONResponse({"error": "A backup is already starting"}, status_code=409)
     return {"success": True}
 
 
