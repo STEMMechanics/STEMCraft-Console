@@ -5547,6 +5547,8 @@ async function loadServerSchedules() {
       return `Every ${task.interval_minutes} minutes`;
     };
     const canManage = page.dataset.canManage === "true";
+    const activeJobs = data.backup_jobs || [];
+    const backupRunning = activeJobs.length > 0;
     const renderTasks = (type) => {
       const matches = tasks.filter((task) => task.task_type === type);
       return matches.length ? matches.map((task) => `
@@ -5563,7 +5565,7 @@ async function loadServerSchedules() {
           : escapeHtml(task.command)
       } · ${describeWhen(task)}</small></div>
             ${canManage ? `<div class="schedule-row-actions">
-              ${type === "backup" ? `<button class="button" onclick="runServerScheduleNow(${Number(task.id)}, this)">Run now</button>` : ""}
+              ${type === "backup" ? `<button class="button" onclick="runServerScheduleNow(${Number(task.id)}, this)" ${backupRunning ? "disabled" : ""}>${backupRunning ? "Backup running" : "Run now"}</button>` : ""}
               <button class="button" onclick="editServerSchedule(${Number(task.id)})">Edit</button>
               <button class="button" onclick="deleteServerSchedule(${Number(task.id)})">Delete</button>
             </div>` : ""}</div>`).join("")
@@ -5572,7 +5574,6 @@ async function loadServerSchedules() {
     if (commandList) commandList.innerHTML = renderTasks("command");
     if (backupList) backupList.innerHTML = renderTasks("backup");
     const progress = document.getElementById("scheduled-backup-progress");
-    const activeJobs = data.backup_jobs || [];
     if (progress) progress.innerHTML = activeJobs.map((job) => {
       const uploading = job.status === "uploading";
       return `<div class="scheduled-backup-job"><div class="backup-job-header"><div><strong>${uploading ? "Copying backup off-site" : "Backup in progress"}</strong><small>${escapeHtml(job.message || job.status)}</small></div><strong>${uploading ? "Active" : `${Number(job.progress || 0)}%`}</strong></div><div class="upload-progress-track"><div class="upload-progress-bar${uploading ? " indeterminate" : ""}" style="width: ${uploading ? 35 : Number(job.progress || 0)}%"></div></div></div>`;

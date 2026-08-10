@@ -71,11 +71,33 @@ def test_run_now_does_not_reschedule_task(monkeypatch):
 
     automation.start_task_now(42)
 
-    assert captured["target"] is automation.execute_task
+    assert captured["target"] is automation._run_manual_task
     assert captured["args"] == (42,)
-    assert captured["kwargs"] == {"reschedule": False}
+    assert captured["kwargs"] == {"backup_server_id": None}
     assert captured["daemon"] is True
     assert captured["started"] is True
+
+
+def test_manual_backup_start_is_reserved_until_worker_finishes(monkeypatch):
+    worker = {}
+
+    class FakeThread:
+        def __init__(self, **kwargs):
+            worker.update(kwargs)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(automation.threading, "Thread", FakeThread)
+    automation._manual_backup_servers.discard(9)
+
+    assert automation.start_task_now(42, backup_server_id=9) is True
+    assert automation.start_task_now(42, backup_server_id=9) is False
+    assert automation.manual_backup_starting(9) is True
+
+    monkeypatch.setattr(automation, "execute_task", lambda *_args, **_kwargs: None)
+    worker["target"](*worker["args"], **worker["kwargs"])
+    assert automation.manual_backup_starting(9) is False
 
 
 def test_daily_schedule_uses_selected_hour():
