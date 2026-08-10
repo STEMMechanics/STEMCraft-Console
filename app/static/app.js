@@ -434,6 +434,7 @@ document.body.addEventListener(
     updateOverviewPlugins();
     updateBackupsPage();
     updatePropertiesPage();
+    loadAdvancedProperties();
     updateSMTPSettings();
     loadOffsiteBackupSettings();
     updateTFASettings();
@@ -3029,9 +3030,9 @@ async function updatePropertiesPage() {
     if (javaSelect) {
       javaSelect.replaceChildren(...(startup.java_runtimes || []).map((runtime) => {
         const option = document.createElement("option");
-        option.value = runtime.path;
-        option.textContent = `Java ${runtime.major} · ${runtime.path}`;
-        option.selected = runtime.path === startup.java_path;
+        option.value = runtime.major;
+        option.textContent = runtime.label || `Java ${runtime.major}`;
+        option.selected = runtime.major === startup.java_major;
         return option;
       }));
     }
@@ -3162,6 +3163,91 @@ async function updatePropertiesPage() {
   }
 }
 
+async function loadAdvancedProperties() {
+  const page = document.querySelector(".advanced-properties-page");
+  const container = document.getElementById("advanced-properties-groups");
+  if (!page || !container) return;
+  try {
+    const response = await fetch(
+      `/api/web/servers/${page.dataset.serverId}/advanced-properties`,
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to load advanced properties.");
+    container.replaceChildren();
+    if (!(data.groups || []).length) {
+      container.innerHTML = '<div class="empty-message">No supported YAML configuration files have been generated yet. Start the server once, then return here.</div>';
+      return;
+    }
+    (data.groups || []).forEach((group, groupIndex) => {
+      const section = document.createElement("details");
+      section.className = "advanced-property-group";
+      section.open = groupIndex === 0;
+      const summary = document.createElement("summary");
+      summary.textContent = `${group.name} (${group.files.length})`;
+      section.appendChild(summary);
+      group.files.forEach((file) => {
+        const editor = document.createElement("div");
+        editor.className = "advanced-property-editor";
+        editor.dataset.path = file.path;
+        const heading = document.createElement("div");
+        heading.className = "advanced-property-heading";
+        const title = document.createElement("div");
+        const strong = document.createElement("strong");
+        strong.textContent = file.label;
+        const path = document.createElement("small");
+        path.textContent = file.path;
+        title.append(strong, path);
+        const status = document.createElement("span");
+        status.className = "muted-small advanced-property-status";
+        heading.append(title, status);
+        const textarea = document.createElement("textarea");
+        textarea.className = "advanced-property-content";
+        textarea.value = file.content;
+        textarea.spellcheck = false;
+        const actions = document.createElement("div");
+        actions.className = "advanced-property-actions";
+        const save = document.createElement("button");
+        save.type = "button";
+        save.className = "button";
+        save.textContent = "Save file";
+        save.addEventListener("click", () => saveAdvancedProperty(editor, save));
+        actions.appendChild(save);
+        editor.append(heading, textarea, actions);
+        section.appendChild(editor);
+      });
+      container.appendChild(section);
+    });
+  } catch (error) {
+    container.innerHTML = `<div class="empty-message">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function saveAdvancedProperty(editor, button) {
+  const page = document.querySelector(".properties-page");
+  const textarea = editor.querySelector(".advanced-property-content");
+  const status = editor.querySelector(".advanced-property-status");
+  if (!page || !textarea || !status) return;
+  button.disabled = true;
+  status.textContent = "Saving...";
+  try {
+    const response = await fetch(
+      `/api/web/servers/${page.dataset.serverId}/advanced-properties`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: editor.dataset.path, content: textarea.value }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to save configuration.");
+    status.textContent = data.running ? "Saved · restart required" : "Saved";
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function setValue(
   id,
   value,
@@ -3206,7 +3292,7 @@ async function saveServerProperties(
 
     java_args: valueOf("property-java-args"),
 
-    java_path: valueOf("property-java-path"),
+    java_major: numberOf("property-java-path"),
 
     motd: valueOf(
       "property-motd",
@@ -3358,7 +3444,7 @@ function updateStartupCommandPreview() {
   const jar = valueOf("property-jar-name") || "paper.jar";
   const options = valueOf("property-java-args").trim();
   preview.textContent = [
-    valueOf("property-java-path") || "java",
+    `java`,
     `-Xms${initial}`,
     `-Xmx${maximum}`,
     options,
@@ -3412,6 +3498,7 @@ function checkedOf(id) {
 }
 
 updatePropertiesPage();
+loadAdvancedProperties();
 
 async function saveOwnProfile() {
   const username = document
@@ -4087,7 +4174,7 @@ async function loadOffsiteBackupSettings() {
     list.innerHTML = offsiteRemoteState.length ? offsiteRemoteState.map((remote) => `
       <div class="offsite-remote-row">
         <div><strong>${escapeHtml(remote.name)}</strong><small>${escapeHtml(offsiteProviderName(remote.backend))}${remote.host ? ` · ${escapeHtml(remote.user || "")}@${escapeHtml(remote.host)}` : ""}</small></div>
-        <div class="offsite-remote-actions"><button class="button" type="button" onclick="testNamedOffsiteRemote('${escapeJsString(remote.name)}')">Test</button>${["b2", "storj", "sftp"].includes(remote.backend) ? `<button class="button" type="button" onclick="openOffsiteRemoteModal('${escapeJsString(remote.name)}')">Edit</button>` : ""}<button class="button danger" type="button" onclick="deleteOffsiteRemote('${escapeJsString(remote.name)}')">Remove</button></div>
+        <div class="offsite-remote-actions">${["b2", "storj", "sftp"].includes(remote.backend) ? `<button class="button" type="button" onclick="openOffsiteRemoteModal('${escapeJsString(remote.name)}')">Edit</button>` : ""}<button class="button danger" type="button" onclick="deleteOffsiteRemote('${escapeJsString(remote.name)}')">Remove</button></div>
       </div>`).join("") : `<div class="empty-message">${data.reason === "not_installed" ? "Install rclone, then add your first destination here." : "No off-site destinations configured yet."}</div>`;
   } catch (error) {
     status.textContent = "Off-site backups could not be checked. Try refreshing after restarting the panel.";
@@ -4163,12 +4250,23 @@ function testNamedOffsiteRemote(name) {
   testOffsiteBackupDestination();
 }
 
+function setOffsiteTestStatus(message, error = false) {
+  const status = document.getElementById("offsite-test-status");
+  if (!status) return;
+  status.textContent = message;
+  status.hidden = !message;
+  status.classList.toggle("error", error);
+}
+
 async function testOffsiteBackupDestination() {
   const remote = document.getElementById("offsite-test-remote")?.value;
   const path = document.getElementById("offsite-test-path")?.value.trim() || "";
-  const status = document.getElementById("offsite-test-status");
-  if (!remote) return alert("Choose a destination first.");
-  status.textContent = "Testing...";
+  if (!remote) {
+    setOffsiteTestStatus("Choose a destination before testing the connection.", true);
+    document.getElementById("offsite-test-remote")?.focus();
+    return;
+  }
+  setOffsiteTestStatus("Testing connection...");
   try {
     const response = await fetch("/api/web/settings/offsite-backups/test", {
       method: "POST",
@@ -4176,9 +4274,12 @@ async function testOffsiteBackupDestination() {
       body: JSON.stringify({ remote, path }),
     });
     const data = await response.json();
-    status.textContent = response.ok ? "Connection successful." : (data.error || "Connection failed.");
+    setOffsiteTestStatus(
+      response.ok ? "Connection successful." : (data.error || "Connection failed."),
+      !response.ok,
+    );
   } catch (error) {
-    status.textContent = "Connection test could not be completed.";
+    setOffsiteTestStatus("Connection test could not be completed.", true);
   }
 }
 

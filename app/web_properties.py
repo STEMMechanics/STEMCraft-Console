@@ -40,10 +40,40 @@ from .web_servers import (
     get_accessible_server,
 )
 from .permissions import has_permission
-from .java_runtime import discover_java_runtimes, resolve_java_path
+from .java_runtime import (
+    discover_java_runtimes, java_runtime_choices, resolve_java_path,
+    select_java_major,
+)
+from .advanced_properties import discover_advanced_properties, save_advanced_property
 
 
 router = APIRouter()
+
+
+@router.get("/api/web/servers/{server_id}/advanced-properties")
+def advanced_properties_data(server_id: int, request: Request, db: Session = Depends(get_db)):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "servers.properties"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    return {"groups": discover_advanced_properties(server)}
+
+
+@router.post("/api/web/servers/{server_id}/advanced-properties")
+async def save_advanced_properties_api(server_id: int, request: Request, db: Session = Depends(get_db)):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "servers.properties"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    data = await request.json()
+    try:
+        save_advanced_property(server, str(data.get("path", "")), str(data.get("content", "")))
+    except (OSError, ValueError) as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    running = bool(server_status(server.id).get("running"))
+    return {"success": True, "running": running, "restart_required": running}
 
 
 @router.get(
@@ -96,6 +126,34 @@ def properties_page(
 
 
 @router.get(
+    "/servers/{server_id}/advanced-properties",
+    response_class=HTMLResponse,
+)
+def advanced_properties_page(
+    server_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if not server or not has_permission(user, "servers.properties"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    context = build_web_context(db, user, active_server=server)
+    context.update({
+        "server": server,
+        "page_title": "Advanced Properties",
+        "active_page": "properties",
+    })
+    return render_page(
+        request,
+        "server_advanced_properties.html",
+        "partials/server_advanced_properties.html",
+        context,
+    )
+
+
+@router.get(
     "/api/web/servers/{server_id}/properties"
 )
 def properties_data(
@@ -137,6 +195,17 @@ def properties_data(
     except ValueError:
         selected_java_path = server.java_path
 
+    runtimes = discover_java_runtimes()
+    selected_runtime = next(
+        (runtime for runtime in runtimes if runtime["path"] == selected_java_path),
+        None,
+    )
+    command = build_java_command(
+        server.memory, server.jar_name, server.java_args, server.min_memory,
+        selected_java_path,
+    )
+    command[0] = "java"
+
     return {
         "properties":
             get_properties_view(server),
@@ -145,16 +214,10 @@ def properties_data(
             "max_memory": server.memory,
             "jar_name": server.jar_name,
             "java_args": server.java_args,
-            "java_path": selected_java_path,
-            "java_runtimes": discover_java_runtimes(),
+            "java_major": selected_runtime["major"] if selected_runtime else None,
+            "java_runtimes": java_runtime_choices(runtimes),
             "jar_files": sorted(jar_files),
-            "command": build_java_command(
-                server.memory,
-                server.jar_name,
-                server.java_args,
-                server.min_memory,
-                server.java_path,
-            ),
+            "command": command,
         },
     }
 
@@ -203,7 +266,11 @@ async def save_properties_api(
         )
         jar_name = str(data.pop("jar_name", server.jar_name)).strip()
         java_args = str(data.pop("java_args", server.java_args)).strip()
-        java_path = resolve_java_path(data.pop("java_path", server.java_path))
+        try:
+            java_major = int(data.pop("java_major"))
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("Select an installed Java runtime") from error
+        java_path = select_java_major(java_major)
 
         units = {"K": 1, "M": 1024, "G": 1024 * 1024}
         def memory_kib(value: str) -> int:

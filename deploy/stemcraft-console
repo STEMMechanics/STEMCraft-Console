@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ORIGINAL_ARGS=("$@")
+
+rerun_as_root() {
+  local self_path
+  self_path=$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)
+  [[ -n "$self_path" ]] || self_path=$(command -v -- "${BASH_SOURCE[0]}" 2>/dev/null || true)
+  if [[ -z "$self_path" ]]; then
+    echo "Unable to resolve the stemcraft-console command path." >&2
+    exit 1
+  fi
+  exec sudo -- "$self_path" "${ORIGINAL_ARGS[@]}"
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -20,8 +33,7 @@ run_unit_command() {
     status) systemctl --no-pager --full status "$unit" ;;
     start|stop|restart)
       if [[ ${EUID} -ne 0 ]]; then
-        echo "The '$action' action must be run as root." >&2
-        exit 1
+        rerun_as_root
       fi
       systemctl "$action" "$unit"
       ;;
@@ -33,8 +45,7 @@ run_unit_command() {
 if [[ ${1:-} == reset-password ]]; then
   [[ $# -le 2 ]] || { usage >&2; exit 2; }
   if [[ ${EUID} -ne 0 ]]; then
-    echo "The 'reset-password' action must be run as root." >&2
-    exit 1
+    rerun_as_root
   fi
   username=${2:-admin}
   [[ "$username" =~ ^[A-Za-z0-9_.@-]{1,64}$ ]] || {

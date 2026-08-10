@@ -11,6 +11,29 @@ from pathlib import Path
 from .processes import build_java_command, resolve_server_jar
 
 
+def _serve_commands(server, process, stopping: threading.Event) -> None:
+    while not stopping.is_set() and process.poll() is None:
+        try:
+            connection, _ = server.accept()
+        except TimeoutError:
+            continue
+        except OSError:
+            if stopping.is_set() or process.poll() is not None:
+                return
+            raise
+        try:
+            with connection:
+                data = connection.recv(4096).decode("utf-8", "replace").strip()
+                if data and "\n" not in data and process.stdin:
+                    process.stdin.write((data + "\n").encode())
+                    process.stdin.flush()
+                    connection.sendall(b"ok\n")
+        except OSError:
+            if stopping.is_set() or process.poll() is not None:
+                return
+            raise
+
+
 def supervise(directory: str, socket_path: str, memory: str, min_memory: str, jar_name: str, java_args: str, java_path: str = "java") -> int:
     root = Path(directory).resolve()
     resolve_server_jar(root, jar_name)
@@ -41,25 +64,22 @@ def supervise(directory: str, socket_path: str, memory: str, min_memory: str, ja
     server.listen(8)
     server.settimeout(1)
 
-    def commands():
-        while process.poll() is None:
-            try:
-                connection, _ = server.accept()
-            except TimeoutError:
-                continue
-            with connection:
-                data = connection.recv(4096).decode("utf-8", "replace").strip()
-                if data and "\n" not in data and process.stdin:
-                    process.stdin.write((data + "\n").encode())
-                    process.stdin.flush()
-                    connection.sendall(b"ok\n")
-
-    thread = threading.Thread(target=commands, daemon=True)
+    thread = threading.Thread(
+        target=_serve_commands,
+        args=(server, process, stopping),
+        name="minecraft-command-socket",
+    )
     thread.start()
     try:
         return process.wait()
     finally:
+        # A clean Minecraft exit can race the socket thread's accept call. Stop
+        # and join it before interpreter finalization so it cannot raise while
+        # Python is tearing down buffered stderr (which turns a clean systemd
+        # stop into SIGABRT and triggers Restart=on-failure).
+        stopping.set()
         server.close()
+        thread.join(timeout=2)
         endpoint.unlink(missing_ok=True)
 
 

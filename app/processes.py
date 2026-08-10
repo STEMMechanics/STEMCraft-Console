@@ -338,10 +338,11 @@ def stop_server(
     if config:
         if not _systemd_status(config)["running"]:
             raise RuntimeError("Server is not running")
-        try:
-            send_command(server_id, "stop")
-        except RuntimeError:
-            pass
+        # Let systemd initiate the shutdown. SIGTERM is translated by the
+        # supervisor into Minecraft's graceful `stop` command. Sending the
+        # console command first creates a race where the process can fail and
+        # Restart=on-failure can schedule a restart before systemd receives the
+        # explicit stop request.
         _systemctl(config, "stop")
         return
     process = processes.get(
