@@ -16,8 +16,16 @@ JOIN_PATTERN = re.compile(
     r": ([A-Za-z0-9_]{1,16}) joined the game"
 )
 
+LOGIN_PATTERN = re.compile(
+    r"\]:\s+([A-Za-z0-9_]{1,16})(?:\[/[^\]]+\])? logged in with entity id"
+)
+
 LEAVE_PATTERN = re.compile(
     r": ([A-Za-z0-9_]{1,16}) left the game"
+)
+
+DISCONNECT_PATTERN = re.compile(
+    r"\]:\s+([A-Za-z0-9_]{1,16})(?:\s+\([^)]*\))? lost connection:"
 )
 
 
@@ -162,9 +170,7 @@ def get_online_players(
         server_id
     ):
 
-        joined = (
-            JOIN_PATTERN.search(line)
-        )
+        joined = JOIN_PATTERN.search(line) or LOGIN_PATTERN.search(line)
 
         if joined:
 
@@ -174,9 +180,7 @@ def get_online_players(
 
             continue
 
-        left = (
-            LEAVE_PATTERN.search(line)
-        )
+        left = LEAVE_PATTERN.search(line) or DISCONNECT_PATTERN.search(line)
 
         if left:
 
