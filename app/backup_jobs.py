@@ -16,6 +16,7 @@ from .models import (
 )
 
 from .processes import (
+    console_cursor,
     send_command,
     server_status,
     wait_for_console_message,
@@ -98,6 +99,8 @@ def run_backup_job(
 
         if running:
 
+            save_cursor = console_cursor(server.id)
+
             send_command(
                 server.id,
                 "save-all flush",
@@ -113,6 +116,7 @@ def run_backup_job(
                         "Saving complete",
                     ],
                     timeout=15,
+                    cursor=save_cursor,
                 )
             )
 

@@ -583,10 +583,28 @@ def get_console(
 
     return list(buffer)
 
+
+def console_cursor(server_id: int):
+    """Capture a backend-specific position before issuing a console command."""
+    config = _systemd_config(server_id)
+    if config:
+        unit = f"{SYSTEMD_UNIT_PREFIX}{config.service_name}.service"
+        result = subprocess.run(
+            ["journalctl", "--unit", unit, "--lines=0", "--show-cursor", "--no-pager"],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+        if result.returncode == 0:
+            for line in reversed(result.stdout.splitlines()):
+                if line.startswith("-- cursor: "):
+                    return ("systemd", line.removeprefix("-- cursor: ").strip())
+        return ("systemd", None)
+    return ("subprocess", len(console_buffers.get(server_id, ())))
+
 def wait_for_console_message(
     server_id: int,
     texts,
     timeout: float = 10.0,
+    cursor=None,
 ) -> bool:
     """
     Wait until a new console line contains
@@ -606,14 +624,8 @@ def wait_for_console_message(
         for text in texts
     ]
 
-    buffer = console_buffers.get(
-        server_id
-    )
-
-    if buffer is None:
-        return False
-
-    start_index = len(buffer)
+    cursor = cursor or console_cursor(server_id)
+    backend, position = cursor
 
     deadline = (
         time.monotonic()
@@ -625,16 +637,21 @@ def wait_for_console_message(
         < deadline
     ):
 
-        current = list(
-            console_buffers.get(
-                server_id,
-                []
-            )
-        )
+        if backend == "systemd":
+            config = _systemd_config(server_id)
+            if not config or not position:
+                lines = []
+            else:
+                unit = f"{SYSTEMD_UNIT_PREFIX}{config.service_name}.service"
+                result = subprocess.run(
+                    ["journalctl", "--unit", unit, f"--after-cursor={position}", "--no-pager", "--output", "cat"],
+                    capture_output=True, text=True, timeout=10, check=False,
+                )
+                lines = result.stdout.splitlines() if result.returncode == 0 else []
+        else:
+            lines = list(console_buffers.get(server_id, []))[int(position):]
 
-        for line in current[
-            start_index:
-        ]:
+        for line in lines:
 
             lower_line = (
                 line.lower()

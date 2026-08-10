@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -19,6 +19,15 @@ from .offsite_backups import OffsiteBackupError, configured_remotes, validate_de
 router = APIRouter()
 
 
+def _utc_iso(value: datetime | None) -> str | None:
+    """Serialize database UTC datetimes with an explicit UTC designator."""
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value.isoformat() + "Z"
+
+
 def _task_json(task):
     return {
         "id": task.id, "name": task.name, "task_type": task.task_type,
@@ -29,8 +38,8 @@ def _task_json(task):
         "remote_destination": task.remote_destination,
         "remote_retention_count": task.remote_retention_count,
         "retention_count": task.retention_count, "enabled": task.enabled,
-        "next_run_at": task.next_run_at.isoformat(),
-        "last_run_at": task.last_run_at.isoformat() if task.last_run_at else None,
+        "next_run_at": _utc_iso(task.next_run_at),
+        "last_run_at": _utc_iso(task.last_run_at),
     }
 
 
@@ -139,8 +148,8 @@ def schedules(server_id: int, request: Request, runs_page: int = 1, runs_per_pag
         "runs": [{
             "id": run.id, "task_id": run.task_id, "task_type": run.task_type,
             "status": run.status, "detail": run.detail,
-            "started_at": run.started_at.isoformat(),
-            "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+            "started_at": _utc_iso(run.started_at),
+            "finished_at": _utc_iso(run.finished_at),
         } for run in runs],
         "runs_pagination": {"page": runs_page, "pages": runs_pages, "total": runs_total},
         "offsite_remotes": remotes,
@@ -246,7 +255,7 @@ def metrics(server_id: int, request: Request, hours: int = 24, db: Session = Dep
         ServerMetric.recorded_at >= datetime.utcnow() - timedelta(hours=hours),
     ).order_by(ServerMetric.recorded_at).limit(5000).all()
     return {"metrics": [{
-        "recorded_at": row.recorded_at.isoformat(), "running": row.running,
+        "recorded_at": _utc_iso(row.recorded_at), "running": row.running,
         "cpu_percent": row.cpu_percent, "memory_bytes": row.memory_bytes,
         "player_count": row.player_count, "uptime_seconds": row.uptime_seconds,
     } for row in rows]}

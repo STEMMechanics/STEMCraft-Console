@@ -3207,8 +3207,6 @@ input[type="checkbox"] {
   gap: 16px;
   padding: 12px 0;
   border-top: 1px solid var(--border);
-
-
 }
 
 .schedule-row small,
@@ -3711,7 +3709,6 @@ input[type="checkbox"] {
 .ip-ban-row,
 .system-instance-row {
   display: flex;
-  align-items: center;
   gap: 10px;
 }
 
@@ -3787,6 +3784,12 @@ input[type="checkbox"] {
   border-top: 1px solid var(--border);
 }
 
+.ip-ban-row:first-child,
+.system-instance-row:first-child {
+  border-top: 0;
+}
+
+
 .ip-ban-row div,
 .system-instance-row div {
   display: flex;
@@ -3802,6 +3805,12 @@ input[type="checkbox"] {
 /* System and server import */
 .system-instances-card {
   margin-top: 16px;
+}
+
+.server-status-dot {
+  height: 8px;
+  width: 8px;
+  border-radius: 50%;
 }
 
 .server-status-dot.running {
@@ -4228,4 +4237,13 @@ input[type="checkbox"] {
 #metrics-range {
   min-height: auto;
   padding: 6px 38px 6px 12px;
+}
+
+.system-instance-row > div > strong {
+  white-space: nowrap;
+  padding-right: 12px;
+}
+
+#schedule-runs-page-label {
+  font-size: 12px;
 }
