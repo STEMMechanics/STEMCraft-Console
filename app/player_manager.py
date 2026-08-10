@@ -160,11 +160,12 @@ def get_online_players(
     ):
         return set()
 
+    # The supervisor is the best starting point, but its in-memory state can be
+    # empty after an upgrade/restart while Minecraft is already running. Replay
+    # the recent console events over that snapshot so a visible login is never
+    # discarded merely because the socket returned a valid empty list.
     runtime_players = get_runtime_online_players(server_id)
-    if runtime_players is not None:
-        return runtime_players
-
-    online = set()
+    online = set(runtime_players or ())
 
     for line in get_console(
         server_id
