@@ -4,6 +4,11 @@ from app.automation import next_cron_run, next_task_run, validate_cron_expressio
 from datetime import datetime
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
+from app.web_automation import _utc_iso
+
+
+def test_web_timestamps_are_explicitly_utc():
+    assert _utc_iso(datetime(2026, 8, 10, 6, 15)) == "2026-08-10T06:15:00Z"
 
 
 def test_backup_retention_deletes_only_backups_beyond_limit(monkeypatch):

@@ -154,6 +154,27 @@ def test_systemd_status_treats_zero_pid_as_missing(monkeypatch):
     assert status == {"running": False, "pid": None, "backend": "systemd"}
 
 
+def test_systemd_console_wait_reads_messages_after_journal_cursor(monkeypatch):
+    config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
+    calls = []
+
+    def run(command, **_kwargs):
+        calls.append(command)
+        if "--show-cursor" in command:
+            return SimpleNamespace(returncode=0, stdout="-- cursor: s=before-save\n")
+        return SimpleNamespace(returncode=0, stdout="[Server thread/INFO]: Saved the game\n")
+
+    monkeypatch.setattr(processes, "_systemd_config", lambda _server_id: config)
+    monkeypatch.setattr(processes.subprocess, "run", run)
+
+    cursor = processes.console_cursor(7)
+    assert processes.wait_for_console_message(7, "Saved the game", timeout=0.1, cursor=cursor)
+    assert calls[1] == [
+        "journalctl", "--unit", "stemcraft-server@survival.service",
+        "--after-cursor=s=before-save", "--no-pager", "--output", "cat",
+    ]
+
+
 def test_process_stats_reuses_psutil_process_for_cpu_deltas(monkeypatch):
     created = []
 
