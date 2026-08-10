@@ -19,6 +19,7 @@ from .processes import register_server
 from .database import (
     SessionLocal,
 )
+from .models import User
 
 from .routers_auth import (
     router as auth_router,
@@ -83,14 +84,6 @@ app = FastAPI(
     version=APP_VERSION,
 )
 
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=SECRET_KEY,
-    same_site="strict",
-    https_only=COOKIE_SECURE,
-)
-
-
 @app.middleware("http")
 async def security_headers(request, call_next):
     response = await call_next(request)
@@ -116,6 +109,40 @@ async def system_operation_lock(request, call_next):
             status_code=423,
         )
     return await call_next(request)
+
+
+@app.middleware("http")
+async def force_password_change(request, call_next):
+    allowed_paths = {
+        "/change-password", "/logout", "/login", "/login/tfa",
+        "/forgot-password", "/reset-password",
+    }
+    user_id = request.session.get("user_id")
+    if user_id and request.url.path not in allowed_paths and not request.url.path.startswith("/static/"):
+        db = SessionLocal()
+        try:
+            user = db.get(User, user_id)
+            must_change = bool(user and user.enabled and user.must_change_password)
+        finally:
+            db.close()
+        if must_change:
+            if request.url.path.startswith("/api/"):
+                return JSONResponse(
+                    {"error": "Change your temporary password before continuing"},
+                    status_code=403,
+                )
+            return RedirectResponse("/change-password", status_code=303)
+    return await call_next(request)
+
+
+# This must wrap the function middleware above so request.session is populated
+# before forced-password enforcement runs.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    same_site="strict",
+    https_only=COOKIE_SECURE,
+)
 
 app.mount(
     "/static",
