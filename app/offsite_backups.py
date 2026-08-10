@@ -20,6 +20,7 @@ _remote_cache: tuple[float, list[str]] = (0, [])
 _DESTINATION = re.compile(r"^([A-Za-z0-9_-]+):(.*)$")
 _REMOTE_NAME = re.compile(r"^[A-Za-z0-9_-]{1,50}$")
 _config_lock = threading.RLock()
+_TRANSFER_PERCENT = re.compile(r",\s*(\d{1,3})%[,\s]")
 
 
 def managed_config_path() -> Path:
@@ -55,6 +56,49 @@ def _run_rclone(*args: str, input_text=None, timeout_seconds=None) -> subprocess
         detail = (result.stderr or result.stdout or "rclone failed").strip().splitlines()[-1]
         raise OffsiteBackupError(detail[:500])
     return result
+
+
+def _transfer_percent(line: str) -> int | None:
+    match = _TRANSFER_PERCENT.search(line)
+    return min(100, int(match.group(1))) if match else None
+
+
+def _run_rclone_with_progress(*args: str, progress_callback) -> None:
+    timeout = max(30, int(os.getenv("STEMCRAFT_RCLONE_TIMEOUT_SECONDS", "3600")))
+    command = _rclone_command(
+        *args, "--stats", "1s", "--stats-one-line", "--stats-unit", "bytes",
+        "--stats-log-level", "NOTICE",
+    )
+    recent_errors = []
+    try:
+        process = subprocess.Popen(
+            command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            text=True, bufsize=1,
+        )
+    except OSError as error:
+        raise OffsiteBackupError("rclone is installed but could not be started") from error
+    deadline = time.monotonic() + timeout
+    assert process.stderr is not None
+    try:
+        while True:
+            line = process.stderr.readline()
+            if line:
+                recent_errors.append(line.strip())
+                recent_errors = recent_errors[-20:]
+                percent = _transfer_percent(line)
+                if percent is not None:
+                    progress_callback(percent)
+            elif process.poll() is not None:
+                break
+            if time.monotonic() >= deadline:
+                process.kill()
+                raise OffsiteBackupError("Off-site transfer timed out")
+        return_code = process.wait()
+    finally:
+        process.stderr.close()
+    if return_code:
+        detail = next((line for line in reversed(recent_errors) if line), "rclone failed")
+        raise OffsiteBackupError(detail[:500])
 
 
 def configured_remotes(refresh=False) -> list[str]:
@@ -194,13 +238,18 @@ def remote_backup_directory(destination: str, server) -> str:
     return f"{validate_destination(destination)}/{server_folder}"
 
 
-def upload_backup(server, filename: str, destination: str) -> str:
+def upload_backup(server, filename: str, destination: str, progress_callback=None) -> str:
     from .backup_manager import safe_backup_path
 
     local_path = safe_backup_path(server, filename)
     remote_directory = remote_backup_directory(destination, server)
     remote_file = f"{remote_directory}/{local_path.name}"
-    _run_rclone("copyto", str(local_path), remote_file, "--transfers", "1", "--checkers", "1")
+    arguments = ("copyto", str(local_path), remote_file, "--transfers", "1", "--checkers", "1")
+    if progress_callback:
+        _run_rclone_with_progress(*arguments, progress_callback=progress_callback)
+        progress_callback(100)
+    else:
+        _run_rclone(*arguments)
     return remote_file
 
 

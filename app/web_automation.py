@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import and_, func, not_
 from sqlalchemy.orm import Session
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .database import get_db
 from .models import BackupJob, ScheduledTask, ServerMetric, TaskRun
@@ -29,24 +30,13 @@ def _utc_iso(value: datetime | None) -> str | None:
 
 
 def _task_json(task):
-    backup_jobs = [{
-        "id": job.id, "status": job.status, "progress": job.progress,
-        "message": job.message, "label": job.label,
-    } for job in db.query(BackupJob).filter(
-        BackupJob.server_id == server.id,
-        BackupJob.status.in_(["queued", "saving", "archiving", "uploading"]),
-    ).order_by(BackupJob.id.desc()).all()]
-    if not backup_jobs and manual_backup_starting(server.id):
-        backup_jobs.append({
-            "id": None, "status": "queued", "progress": 0,
-            "message": "Starting scheduled backup", "label": "Scheduled backup",
-        })
     return {
         "id": task.id, "name": task.name, "task_type": task.task_type,
         "command": task.command, "interval_minutes": task.interval_minutes,
         "frequency": task.frequency, "run_hour": task.run_hour,
         "run_weekday": task.run_weekday,
         "cron_expression": task.cron_expression,
+        "schedule_timezone": task.schedule_timezone or SCHEDULE_TIMEZONE_NAME,
         "remote_destination": task.remote_destination,
         "remote_retention_count": task.remote_retention_count,
         "retention_count": task.retention_count, "enabled": task.enabled,
@@ -61,6 +51,11 @@ def _schedule_values(data: dict) -> dict:
     command = str(data.get("command", "")).strip() or None
     frequency = str(data.get("frequency", "")).strip()
     cron_expression = str(data.get("cron_expression", "")).strip() or None
+    schedule_timezone = str(data.get("schedule_timezone", "")).strip()[:100] or SCHEDULE_TIMEZONE_NAME
+    try:
+        ZoneInfo(schedule_timezone)
+    except (ZoneInfoNotFoundError, ValueError) as error:
+        raise ValueError("Choose a valid timezone") from error
     try:
         interval = int(data.get("interval_minutes", 0) or 0)
         retention = int(data["retention_count"]) if data.get("retention_count") else None
@@ -97,6 +92,7 @@ def _schedule_values(data: dict) -> dict:
     return {
         "task_type": task_type, "name": name[:100], "command": command,
         "frequency": frequency, "cron_expression": cron_expression,
+        "schedule_timezone": schedule_timezone,
         "interval_minutes": interval, "retention_count": retention,
         "run_hour": run_hour, "run_weekday": run_weekday,
         "remote_destination": remote_destination,
@@ -155,6 +151,18 @@ def schedules(server_id: int, request: Request, runs_page: int = 1, runs_per_pag
         remotes, remote_error = configured_remotes(), None
     except OffsiteBackupError as error:
         remotes, remote_error = [], str(error)
+    backup_jobs = [{
+        "id": job.id, "status": job.status, "progress": job.progress,
+        "message": job.message, "label": job.label,
+    } for job in db.query(BackupJob).filter(
+        BackupJob.server_id == server.id,
+        BackupJob.status.in_(["queued", "saving", "archiving", "uploading"]),
+    ).order_by(BackupJob.id.desc()).all()]
+    if not backup_jobs and manual_backup_starting(server.id):
+        backup_jobs.append({
+            "id": None, "status": "queued", "progress": 0,
+            "message": "Starting scheduled backup", "label": "Scheduled backup",
+        })
     return {
         "tasks": [_task_json(task) for task in tasks],
         "runs": [{
