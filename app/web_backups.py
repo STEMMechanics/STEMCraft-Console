@@ -175,6 +175,7 @@ async def create_backup_api(
                     "queued",
                     "saving",
                     "archiving",
+                    "uploading",
                 ]
             ),
         )

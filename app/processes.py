@@ -1,6 +1,7 @@
 import subprocess
 import os
 import socket
+import json
 import re
 import shlex
 import threading
@@ -42,6 +43,7 @@ server_configs: dict[int, ServerProcessConfig] = {}
 SERVICE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}$")
 SYSTEMD_UNIT_PREFIX = os.getenv("STEMCRAFT_SYSTEMD_UNIT_PREFIX", "stemcraft-server@")
 SYSTEMD_SOCKET_DIR = Path(os.getenv("STEMCRAFT_SYSTEMD_SOCKET_DIR", "/run/stemcraft-console"))
+SYSTEMD_PLAYERS_QUERY = b"__stemcraft_online_players__"
 
 
 def register_server(server) -> None:
@@ -535,6 +537,30 @@ def send_command(
     )
 
     process.stdin.flush()
+
+
+def get_runtime_online_players(server_id: int) -> set[str] | None:
+    """Return supervisor-owned live player state for systemd servers.
+
+    ``None`` means this is not a systemd server or its supervisor is from an
+    older release, so callers can retain their console-log fallback.
+    """
+    config = _systemd_config(server_id)
+    if not config:
+        return None
+    endpoint = SYSTEMD_SOCKET_DIR / f"{config.service_name}.sock"
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(2)
+            client.connect(str(endpoint))
+            client.sendall(SYSTEMD_PLAYERS_QUERY)
+            response = client.recv(65536)
+        data = json.loads(response.decode("utf-8"))
+        if not isinstance(data, list):
+            return None
+        return {name for name in data if isinstance(name, str)}
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
 
 
 def get_console(

@@ -41,11 +41,15 @@
   <section class="overview-card ip-bans-card">
     <div class="card-header">
       <span>IP Bans (<span id="ip-ban-count">0</span>)</span>
-      {% if user.can("players.manage") %}<form class="ip-ban-form" onsubmit="banIpAddress(event)">
-        <input name="ip" placeholder="IPv4 or IPv6 address" required>
-        <button class="button danger" type="submit">Ban IP</button>
-      </form>{% endif %}
     </div>
-    <div id="ip-ban-list" class="ip-ban-list"><div class="empty-message">No IP bans.</div></div>
+    <div class="ip-ban-content">
+      {% if user.can("players.manage") %}
+        <form class="ip-ban-entry" onsubmit="banIpAddress(event)">
+          <label class="property-field"><span>IP address</span><input name="ip" placeholder="IPv4 or IPv6 address" required><small>Enter the address to prevent it from connecting to this server.</small></label>
+          <div class="ip-ban-entry-actions"><button class="button danger" type="submit"><i class="fa-solid fa-ban"></i> Ban IP</button></div>
+      </form>
+      {% endif %}
+      <div id="ip-ban-list" class="ip-ban-list"><div class="empty-message">No IP bans.</div></div>
+    </div>
   </section>
 </div>

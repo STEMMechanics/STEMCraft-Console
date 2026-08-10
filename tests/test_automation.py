@@ -52,6 +52,27 @@ def test_initial_metric_failure_does_not_prevent_automation_start(monkeypatch, c
     assert "Initial historical metric collection failed" in caplog.text
 
 
+def test_run_now_does_not_reschedule_task(monkeypatch):
+    captured = {}
+
+    class FakeThread:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def start(self):
+            captured["started"] = True
+
+    monkeypatch.setattr(automation.threading, "Thread", FakeThread)
+
+    automation.start_task_now(42)
+
+    assert captured["target"] is automation.execute_task
+    assert captured["args"] == (42,)
+    assert captured["kwargs"] == {"reschedule": False}
+    assert captured["daemon"] is True
+    assert captured["started"] is True
+
+
 def test_daily_schedule_uses_selected_hour():
     task = SimpleNamespace(frequency="daily", run_hour=7, run_weekday=None)
     now = datetime(2026, 8, 9, 8, 30)

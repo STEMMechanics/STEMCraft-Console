@@ -51,7 +51,7 @@
 
     <section class="overview-card recent-logs overview-console-card">
       <div class="card-header"><span>Recent Logs</span>
-        <a href="/servers/{{ server.id }}/console" hx-get="/servers/{{ server.id }}/console" hx-target="#page-content" hx-push-url="true">Console <i class="fa-solid fa-arrow-right"></i></a>
+        <a class="panel-header-button" href="/servers/{{ server.id }}/console" hx-get="/servers/{{ server.id }}/console" hx-target="#page-content" hx-push-url="true"><i class="fa-solid fa-terminal"></i> Console</a>
       </div>
       <pre id="overview-logs">Loading logs...</pre>
     </section>

@@ -129,7 +129,7 @@ def can_execute_task(task, server_id: int) -> bool:
     return task.task_type != "command" or bool(server_status(server_id).get("running"))
 
 
-def execute_task(task_id: int) -> None:
+def execute_task(task_id: int, *, reschedule: bool = True) -> None:
     db = SessionLocal()
     run = None
     try:
@@ -142,7 +142,8 @@ def execute_task(task_id: int) -> None:
         register_server(server)
         now = datetime.utcnow()
         task.last_run_at = now
-        task.next_run_at = next_task_run(task, now)
+        if reschedule:
+            task.next_run_at = next_task_run(task, now)
         if not can_execute_task(task, server.id):
             # Advance the schedule quietly. A command is only meaningful while
             # the Minecraft process is running and should not create a failed run.
@@ -164,7 +165,7 @@ def execute_task(task_id: int) -> None:
         elif task.task_type == "backup":
             existing = db.query(BackupJob).filter(
                 BackupJob.server_id == server.id,
-                BackupJob.status.in_(["queued", "saving", "archiving"]),
+                BackupJob.status.in_(["queued", "saving", "archiving", "uploading"]),
             ).first()
             if existing:
                 raise RuntimeError("A backup is already running")
@@ -182,13 +183,23 @@ def execute_task(task_id: int) -> None:
             enforce_backup_retention(server, task.retention_count)
             run.detail = f"Created {job.filename}"
             if task.remote_destination:
+                job.status = "uploading"
+                job.progress = 100
+                job.message = f"Copying backup to {task.remote_destination}"
+                job.finished_at = None
+                db.commit()
                 try:
                     remote_file = upload_backup(server, job.filename, task.remote_destination)
                     enforce_remote_retention(server, task.remote_destination, task.remote_retention_count)
                     run.detail += f" · copied to {remote_file}"
+                    job.status = "complete"
+                    job.message = "Backup and off-site copy complete"
                 except OffsiteBackupError as error:
                     run.status = "warning"
                     run.detail += f" · off-site copy failed: {error}"
+                    job.status = "complete"
+                    job.message = "Backup complete; off-site copy failed"
+                job.finished_at = datetime.utcnow()
         else:
             raise RuntimeError("Unsupported scheduled task type")
 
@@ -204,6 +215,17 @@ def execute_task(task_id: int) -> None:
             db.commit()
     finally:
         db.close()
+
+
+def start_task_now(task_id: int) -> None:
+    """Run a task outside the scheduler without moving its next due time."""
+    threading.Thread(
+        target=execute_task,
+        args=(task_id,),
+        kwargs={"reschedule": False},
+        daemon=True,
+        name=f"scheduled-task-{task_id}",
+    ).start()
 
 
 def collect_metrics() -> None:

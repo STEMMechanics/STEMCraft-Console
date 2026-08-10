@@ -1,51 +1,54 @@
-<div class="automation-page" data-server-id="{{ server.id }}" data-timezone="{{ schedule_timezone }}" data-page-title="Scheduling">
+<div class="automation-page" data-server-id="{{ server.id }}" data-timezone="{{ schedule_timezone }}" data-can-manage="{{ 'true' if user.can('automation.manage') else 'false' }}" data-page-title="Scheduling">
   <div class="automation-panels">
     <section class="overview-card automation-card">
-      <div class="card-header"><span><i class="fa-solid fa-terminal"></i> Commands</span></div>
-      {% if user.can("automation.manage") %}
-      <form class="friendly-schedule-form" onsubmit="createServerSchedule(event)">
-        <input type="hidden" name="task_type" value="command">
-        <label><span>Name this job</span><input name="name" maxlength="100" placeholder="Morning message" required></label>
-        <label><span>Command to run</span><input name="command" maxlength="500" placeholder="say Good morning!" required></label>
-        {% include "partials/schedule_when_fields.html" %}
-        <button class="button" type="submit">Schedule command</button>
-      </form>
-      {% endif %}
-      <div class="saved-schedules">
-        <div class="saved-schedules-heading"><i class="fa-solid fa-calendar-check"></i><span>Scheduled commands</span></div>
-        <div id="command-schedule-list" class="schedule-list">Loading commands...</div>
-      </div>
+      <div class="card-header"><span><i class="fa-solid fa-terminal"></i> Commands</span>{% if user.can("automation.manage") %}<button class="panel-header-button" type="button" onclick="openServerScheduleModal('command')"><i class="fa-solid fa-plus"></i> Add command</button>{% endif %}</div>
+      <div id="command-schedule-list" class="schedule-list">Loading commands...</div>
     </section>
 
     <section class="overview-card automation-card">
-      <div class="card-header"><span><i class="fa-solid fa-box-archive"></i> Backups</span></div>
-      {% if user.can("automation.manage") %}
-      <form class="friendly-schedule-form" onsubmit="createServerSchedule(event)">
-        <input type="hidden" name="task_type" value="backup">
-        <label><span>Name this job</span><input name="name" maxlength="100" placeholder="Daily backup" required></label>
-        {% include "partials/schedule_when_fields.html" %}
-        <label><span>How many backups should we keep?</span><input name="retention_count" type="number" min="1" max="10000" value="7" required></label>
-        <div class="offsite-schedule-fields">
-          <label><span>Off-site copy (optional)</span><input name="remote_destination" list="rclone-remotes" maxlength="500" placeholder="b2:bucket/minecraft-backups"><small>Uses a remote from the server's rclone configuration.</small></label>
-          <label><span>How many off-site backups should we keep?</span><input name="remote_retention_count" type="number" min="1" max="10000" value="30"></label>
-          <datalist id="rclone-remotes"></datalist>
-          <div id="offsite-availability" class="muted-small"></div>
-        </div>
-        <button class="button" type="submit">Schedule backup</button>
-      </form>
-      {% endif %}
-      <div class="saved-schedules">
-        <div class="saved-schedules-heading"><i class="fa-solid fa-calendar-check"></i><span>Scheduled backups</span></div>
-        <div id="backup-schedule-list" class="schedule-list">Loading backups...</div>
-      </div>
+      <div class="card-header"><span><i class="fa-solid fa-box-archive"></i> Backups</span>{% if user.can("automation.manage") %}<button class="panel-header-button" type="button" onclick="openServerScheduleModal('backup')"><i class="fa-solid fa-plus"></i> Add backup</button>{% endif %}</div>
+      <div id="scheduled-backup-progress" class="scheduled-backup-progress"></div>
+      <div id="backup-schedule-list" class="schedule-list">Loading backups...</div>
     </section>
   </div>
 
   <section class="overview-card automation-card">
     <div class="card-header"><span>Recent activity</span></div>
     <div id="schedule-runs" class="schedule-runs"></div>
+    <div id="schedule-runs-pagination" class="schedule-runs-pagination" hidden>
+      <button class="button" type="button" onclick="changeScheduleRunsPage(-1)">Previous</button>
+      <span id="schedule-runs-page-label"></span>
+      <button class="button" type="button" onclick="changeScheduleRunsPage(1)">Next</button>
+    </div>
   </section>
 </div>
+
+{% if user.can("automation.manage") %}
+{% for task_type, title in [('command', 'command'), ('backup', 'backup')] %}
+<div id="{{ task_type }}-schedule-modal" class="modal-backdrop" hidden onclick="closeServerScheduleModal(event)">
+  <div class="modal-card schedule-editor-modal" role="dialog" aria-modal="true" aria-labelledby="{{ task_type }}-schedule-title">
+    <h2 id="{{ task_type }}-schedule-title">Add {{ title }}</h2>
+    <form class="friendly-schedule-form" onsubmit="createServerSchedule(event)">
+      <input type="hidden" name="task_type" value="{{ task_type }}">
+      <input type="hidden" name="schedule_id" value="">
+      <label><span>Name this job</span><input name="name" maxlength="100" placeholder="{{ 'Morning message' if task_type == 'command' else 'Daily backup' }}" required></label>
+      {% if task_type == 'command' %}<label><span>Command to run</span><input name="command" maxlength="500" placeholder="say Good morning!" required></label>{% endif %}
+      {% include "partials/schedule_when_fields.html" %}
+      {% if task_type == 'backup' %}
+      <label><span>How many backups should we keep?</span><input name="retention_count" type="number" min="1" max="10000" value="7" required></label>
+      <div class="offsite-schedule-fields">
+        <label><span>Off-site copy (optional)</span><input name="remote_destination" list="rclone-remotes" maxlength="500" placeholder="b2:bucket/minecraft-backups"><small>Uses a remote from the server's rclone configuration.</small></label>
+        <label><span>How many off-site backups should we keep?</span><input name="remote_retention_count" type="number" min="1" max="10000" value="30"></label>
+        <datalist id="rclone-remotes"></datalist>
+        <div id="offsite-availability" class="muted-small"></div>
+      </div>
+      {% endif %}
+      <div class="modal-actions"><button class="button" type="button" onclick="closeServerScheduleModal()">Cancel</button><button class="button schedule-submit-button" type="submit" data-create-label="Schedule {{ title }}">Schedule {{ title }}</button></div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
 
 <div id="custom-schedule-modal" class="modal-backdrop" hidden>
   <div class="modal-card custom-schedule-modal" role="dialog" aria-modal="true" aria-labelledby="custom-schedule-title">
