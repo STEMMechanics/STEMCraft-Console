@@ -4638,7 +4638,7 @@ function renderBackupJobs(
                         </div>
 
                         <strong>
-                            ${job.status === "uploading" ? "Active" : `${job.progress}%`}
+                            ${Number.isFinite(Number(job.progress)) ? `${Number(job.progress)}%` : "In progress"}
                         </strong>
 
                     </div>
@@ -4646,8 +4646,8 @@ function renderBackupJobs(
                     <div class="upload-progress-track">
 
                         <div
-                            class="upload-progress-bar${job.status === "uploading" ? " indeterminate" : ""}"
-                            style="width: ${job.status === "uploading" ? 35 : job.progress}%"
+                            class="upload-progress-bar"
+                            style="width: ${Number(job.progress || 0)}%"
                         ></div>
 
                     </div>
@@ -5429,6 +5429,16 @@ function automationPage() {
   );
 }
 
+function localScheduleTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || automationPage()?.dataset.timezone || "local time";
+}
+
+function parseUtcTimestamp(value) {
+  const timestamp = String(value || "");
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp);
+  return new Date(hasTimezone ? timestamp : `${timestamp}Z`);
+}
+
 function drawMetricChart(canvasId, rows, value, label) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
@@ -5524,7 +5534,6 @@ async function loadServerSchedules() {
     serverScheduleState = tasks;
     const taskNames = new Map((data.tasks || []).map((task) => [Number(task.id), task.name]));
     const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    const timezone = page.dataset.timezone || "server time";
     const remoteOptions = document.getElementById("rclone-remotes");
     if (remoteOptions) {
       remoteOptions.innerHTML = (data.offsite_remotes || []).map((remote) => `<option value="${escapeHtml(remote)}:"></option>`).join("");
@@ -5539,6 +5548,7 @@ async function loadServerSchedules() {
     }
     const describeWhen = (task) => {
       if (task.frequency === "hourly") return "Every hour";
+      const timezone = task.schedule_timezone || localScheduleTimezone();
       const time = `${String(task.run_hour ?? 0).padStart(2, "0")}:00 ${timezone}`;
       if (task.frequency === "daily") return `Every day at ${time}`;
       if (task.frequency === "weekly") return `Every ${weekdays[task.run_weekday] || "week"} at ${time}`;
@@ -5555,15 +5565,15 @@ async function loadServerSchedules() {
             <div class="schedule-row"><div><strong>${
         escapeHtml(task.name)
       }</strong><br>
-            <small>${
+            <small>${task.task_type === "backup" ? `${describeWhen(task)} · ` : ""}${
         task.task_type === "backup"
-          ? `Keep ${task.retention_count || "all"} local backups${
+          ? `Keeps ${task.retention_count || "all"} backup${Number(task.retention_count) === 1 ? "" : "s"} on this server${
             task.remote_destination
-              ? ` · Copy to ${escapeHtml(task.remote_destination)} · Keep ${task.remote_retention_count || "all"} off-site`
+              ? ` and copies each one to ${escapeHtml(task.remote_destination)}, keeping ${task.remote_retention_count || "all"} there`
               : ""
           }`
           : escapeHtml(task.command)
-      } · ${describeWhen(task)}</small></div>
+      }${task.task_type === "command" ? ` · ${describeWhen(task)}` : ""}</small></div>
             ${canManage ? `<div class="schedule-row-actions">
               ${type === "backup" ? `<button class="button" onclick="runServerScheduleNow(${Number(task.id)}, this)" ${backupRunning ? "disabled" : ""}>${backupRunning ? "Backup running" : "Run now"}</button>` : ""}
               <button class="button" onclick="editServerSchedule(${Number(task.id)})">Edit</button>
@@ -5576,11 +5586,12 @@ async function loadServerSchedules() {
     const progress = document.getElementById("scheduled-backup-progress");
     if (progress) progress.innerHTML = activeJobs.map((job) => {
       const uploading = job.status === "uploading";
-      return `<div class="scheduled-backup-job"><div class="backup-job-header"><div><strong>${uploading ? "Copying backup off-site" : "Backup in progress"}</strong><small>${escapeHtml(job.message || job.status)}</small></div><strong>${uploading ? "Active" : `${Number(job.progress || 0)}%`}</strong></div><div class="upload-progress-track"><div class="upload-progress-bar${uploading ? " indeterminate" : ""}" style="width: ${uploading ? 35 : Number(job.progress || 0)}%"></div></div></div>`;
+      const percent = Number(job.progress || 0);
+      return `<div class="scheduled-backup-job"><div class="backup-job-header"><div><strong>${uploading ? "Copying backup off-site" : "Backup in progress"}</strong><small>${escapeHtml(job.message || job.status)}</small></div><strong>${Number.isFinite(percent) ? `${percent}%` : "In progress"}</strong></div><div class="upload-progress-track"><div class="upload-progress-bar" style="width: ${Number.isFinite(percent) ? percent : 0}%"></div></div></div>`;
     }).join("");
     const runs = document.getElementById("schedule-runs");
     const recentRuns = [...(data.runs || [])].sort(
-      (left, right) => new Date(right.started_at) - new Date(left.started_at),
+      (left, right) => parseUtcTimestamp(right.started_at) - parseUtcTimestamp(left.started_at),
     );
     const activityTitle = (run) => {
       const name = taskNames.get(Number(run.task_id)) || run.task_type;
@@ -5596,11 +5607,12 @@ async function loadServerSchedules() {
       return `${action} ${run.task_type} “${name}”`;
     };
     runs.innerHTML = recentRuns.length ? recentRuns.map((run) => {
-      const startedAt = new Date(run.started_at);
+      const startedAt = parseUtcTimestamp(run.started_at);
+      const activityTimezone = localScheduleTimezone();
       return `<div class="schedule-run">
         <time datetime="${escapeHtml(run.started_at)}">
-          <strong>${escapeHtml(startedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}</strong>
-          <span>${escapeHtml(startedAt.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }))}</span>
+          <strong>${escapeHtml(startedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: activityTimezone }))}</strong>
+          <span>${escapeHtml(startedAt.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric", timeZone: activityTimezone }))}</span>
         </time>
         <div class="schedule-run-detail">
           <strong>${escapeHtml(activityTitle(run))}</strong>
@@ -5628,8 +5640,7 @@ function changeScheduleRunsPage(direction) {
   loadServerSchedules();
 }
 
-function friendlyScheduleSummary(frequency, runHour = 0, runWeekday = 6, cronExpression = "") {
-  const timezone = automationPage()?.dataset.timezone || "server time";
+function friendlyScheduleSummary(frequency, runHour = 0, runWeekday = 6, cronExpression = "", timezone = localScheduleTimezone()) {
   const time = `${String(runHour ?? 0).padStart(2, "0")}:00`;
   const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   if (frequency === "hourly") return `At the start of every hour · ${timezone}`;
@@ -5668,7 +5679,7 @@ function customWeekdayValue() {
 function updateCustomSchedulePreview() {
   const expression = [customCronValue("custom-cron-minute"), customCronValue("custom-cron-hour"), customCronValue("custom-cron-monthday"), customCronValue("custom-cron-month"), customWeekdayValue()].join(" ");
   document.getElementById("custom-cron-preview").textContent = expression;
-  document.getElementById("custom-cron-description").textContent = `Custom schedule in ${automationPage()?.dataset.timezone || "server time"}`;
+  document.getElementById("custom-cron-description").textContent = `Custom schedule in ${localScheduleTimezone()}`;
   return expression;
 }
 
@@ -5707,7 +5718,7 @@ function saveCustomSchedule() {
   if (expression.split(" ").some((part) => !part)) return alert("Choose at least one day and complete every field.");
   const fields = customScheduleSelect.closest(".schedule-when-fields");
   fields.querySelector("[name=cron_expression]").value = expression;
-  fields.querySelector(".selected-schedule-summary").innerHTML = `Custom <code>${escapeHtml(expression)}</code> · ${escapeHtml(automationPage()?.dataset.timezone || "server time")}`;
+  fields.querySelector(".selected-schedule-summary").innerHTML = `Custom <code>${escapeHtml(expression)}</code> · ${escapeHtml(localScheduleTimezone())}`;
   closeCustomSchedule(true);
 }
 
@@ -5765,6 +5776,7 @@ function editServerSchedule(taskId) {
   form.elements.run_hour.value = task.run_hour ?? 0;
   form.elements.run_weekday.value = task.run_weekday ?? 6;
   form.elements.cron_expression.value = task.cron_expression || "";
+  form.elements.schedule_timezone.value = localScheduleTimezone();
   if (form.elements.retention_count) form.elements.retention_count.value = task.retention_count || 7;
   if (form.elements.remote_destination) form.elements.remote_destination.value = task.remote_destination || "";
   if (form.elements.remote_retention_count) form.elements.remote_retention_count.value = task.remote_retention_count || 30;
@@ -5774,6 +5786,7 @@ function editServerSchedule(taskId) {
     task.run_hour ?? 0,
     task.run_weekday ?? 6,
     task.cron_expression || "",
+    localScheduleTimezone(),
   );
   form.querySelector(".schedule-submit-button").textContent = `Save ${task.task_type}`;
   const modal = form.closest(".modal-backdrop");
@@ -5785,6 +5798,7 @@ function editServerSchedule(taskId) {
 function resetServerScheduleForm(form) {
   form.reset();
   form.elements.schedule_id.value = "";
+  form.elements.schedule_timezone.value = localScheduleTimezone();
   form.elements.frequency.value = form.elements.task_type.value === "backup" ? "daily" : "hourly";
   const submit = form.querySelector(".schedule-submit-button");
   submit.textContent = submit.dataset.createLabel;

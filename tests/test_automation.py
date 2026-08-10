@@ -121,6 +121,16 @@ def test_daily_schedule_converts_local_hour_to_utc():
     assert next_task_run(task, now, ZoneInfo("Australia/Brisbane")) == datetime(2026, 8, 9, 21)
 
 
+def test_task_uses_its_saved_timezone_by_default():
+    task = SimpleNamespace(
+        frequency="daily", run_hour=7, run_weekday=None,
+        schedule_timezone="Australia/Brisbane",
+    )
+    now = datetime(2026, 8, 9, 8, 30)
+
+    assert next_task_run(task, now) == datetime(2026, 8, 9, 21)
+
+
 def test_monthly_schedule_runs_on_first_day():
     task = SimpleNamespace(frequency="monthly", run_hour=0, run_weekday=None)
 

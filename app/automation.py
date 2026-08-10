@@ -7,6 +7,7 @@ from calendar import monthrange
 from datetime import datetime, timedelta, timezone
 
 import psutil
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .backup_jobs import run_backup_job
 from .backup_manager import list_backups, delete_backup
@@ -30,6 +31,11 @@ METRIC_RETENTION_DAYS = max(1, int(os.getenv("STEMCRAFT_METRIC_RETENTION_DAYS", 
 
 def next_task_run(task, now: datetime, schedule_timezone=None) -> datetime:
     """Return the next naive UTC run in the configured local timezone."""
+    if schedule_timezone is None and getattr(task, "schedule_timezone", None):
+        try:
+            schedule_timezone = ZoneInfo(task.schedule_timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            schedule_timezone = None
     if task.frequency == "hourly":
         return now.replace(second=0, microsecond=0) + timedelta(hours=1)
     if task.frequency == "custom":
@@ -186,12 +192,20 @@ def execute_task(task_id: int, *, reschedule: bool = True) -> None:
             run.detail = f"Created {job.filename}"
             if task.remote_destination:
                 job.status = "uploading"
-                job.progress = 100
+                job.progress = 0
                 job.message = f"Copying backup to {task.remote_destination}"
                 job.finished_at = None
                 db.commit()
                 try:
-                    remote_file = upload_backup(server, job.filename, task.remote_destination)
+                    def update_upload_progress(percent):
+                        job.progress = max(0, min(100, int(percent)))
+                        job.message = f"Copying backup to {task.remote_destination} · {job.progress}%"
+                        db.commit()
+
+                    remote_file = upload_backup(
+                        server, job.filename, task.remote_destination,
+                        progress_callback=update_upload_progress,
+                    )
                     enforce_remote_retention(server, task.remote_destination, task.remote_retention_count)
                     run.detail += f" · copied to {remote_file}"
                     job.status = "complete"
