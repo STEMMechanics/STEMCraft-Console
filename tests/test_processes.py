@@ -114,6 +114,22 @@ def test_systemctl_stop_disables_instance(monkeypatch):
     ]
 
 
+def test_systemd_stop_is_initiated_by_systemd_without_console_race(monkeypatch):
+    config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
+    actions = []
+    monkeypatch.setattr(processes, "_systemd_config", lambda _server_id: config)
+    monkeypatch.setattr(processes, "_systemd_status", lambda _config: {"running": True})
+    monkeypatch.setattr(processes, "_systemctl", lambda _config, action: actions.append(action))
+    monkeypatch.setattr(
+        processes, "send_command",
+        lambda *_args: pytest.fail("console stop must not precede systemctl stop"),
+    )
+
+    processes.stop_server(1)
+
+    assert actions == ["stop"]
+
+
 def test_systemd_status_parses_properties_by_name(monkeypatch):
     config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
     result = SimpleNamespace(

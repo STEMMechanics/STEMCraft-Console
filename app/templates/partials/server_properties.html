@@ -525,6 +525,12 @@
                 class="muted-small"
             ></span>
 
+            <a class="button" href="/servers/{{ server.id }}/advanced-properties"
+               hx-get="/servers/{{ server.id }}/advanced-properties"
+               hx-target="#page-content" hx-push-url="true">
+                Advanced Settings
+            </a>
+
             <button class="button" type="submit">
                 Save Changes
             </button>

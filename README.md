@@ -133,19 +133,30 @@ locations:
 Useful service commands are available through the installed helper:
 
 ```bash
-sudo stemcraft-console status
-sudo stemcraft-console restart
+stemcraft-console status
+stemcraft-console restart
 stemcraft-console logs
-sudo stemcraft-console reset-password admin
-sudo stemcraft-console server survival restart
+stemcraft-console reset-password admin
+stemcraft-console server survival restart
 stemcraft-console server survival logs
 ```
 
-The helper is installed at `/usr/bin/stemcraft-console` so it remains
+Privileged actions automatically rerun through `sudo` using the helper's
+resolved absolute path. The helper is installed at `/usr/bin/stemcraft-console` so it remains
 available when `sudo` uses a restricted `secure_path`, including the default on
 Oracle Linux 8. Upgrading or rerunning the installer in repair mode adds this
 path to existing installations that only have the legacy
 `/usr/local/sbin/stemcraft-console` copy.
+
+The in-panel application updater cannot modify root-owned command locations.
+After updating an older installation that lacks `/usr/bin/stemcraft-console`,
+repair it once with the release installer. Until then, use the legacy absolute
+path:
+
+```bash
+sudo /usr/local/sbin/stemcraft-console restart
+curl -fsSL https://dev.stemcraft.com.au/install.sh | sudo bash
+```
 
 The final example uses the server's systemd service name, which is configured
 when the server is created or imported in the panel.
@@ -188,18 +199,18 @@ sudo ./scripts/rollback.sh /var/lib/stemcraft-console/upgrades/TIMESTAMP
 ### Publishing a release
 
 Set `APP_VERSION` in `app/version.py`, merge the release-preparation PR, then
-tag that exact commit. For version 0.2.2:
+tag that exact commit. For version 0.2.3:
 
 ```bash
 git switch main
 git pull --ff-only
-git tag 0.2.2
-git push origin 0.2.2
+git tag 0.2.3
+git push origin 0.2.3
 ```
 
 The release workflow verifies that the tag matches `APP_VERSION`, creates the
 GitHub release, and attaches a versioned application archive with its SHA-256
-checksum. Both `0.2.2` and `v0.2.2` tag styles are supported, but the existing
+checksum. Both `0.2.3` and `v0.2.3` tag styles are supported, but the existing
 unprefixed style is preferred for consistency. The one-line installer resolves
 GitHub's latest published release and will begin installing it once the release
 has been published.

@@ -443,16 +443,13 @@ a {
   color: var(--muted);
 }
 
-a.button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .button,
 button {
   min-height: 40px;
   padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 
   border: 1px solid var(--border);
 
@@ -1830,6 +1827,84 @@ button.start:hover {
   white-space: nowrap;
 }
 
+.advanced-properties-section .card-header small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.advanced-properties-intro {
+  padding: 15px 20px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.advanced-properties-groups {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+}
+
+.advanced-property-group {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.advanced-property-group > summary {
+  padding: 13px 15px;
+  background: #fafbfc;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.advanced-property-editor {
+  display: grid;
+  gap: 10px;
+  padding: 15px;
+  border-top: 1px solid var(--border);
+}
+
+.advanced-property-heading,
+.advanced-property-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.advanced-property-heading strong,
+.advanced-property-heading small {
+  display: block;
+}
+
+.advanced-property-heading small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.advanced-property-content {
+  width: 100%;
+  min-height: 280px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.advanced-property-actions {
+  justify-content: flex-end;
+}
+
 .property-field input,
 .property-field select {
   width: 100%;
@@ -2334,6 +2409,10 @@ input[type="checkbox"] {
   gap: 18px;
 
   padding: 20px;
+}
+
+.settings-content > .full-width {
+  grid-column: 1 / -1;
 }
 
 .settings-save-row {
@@ -3234,6 +3313,22 @@ input[type="checkbox"] {
   gap: 8px;
 }
 
+.offsite-test-status {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f7fafc;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.offsite-test-status.error {
+  border-color: #f1b5b5;
+  background: #fff5f5;
+  color: var(--danger);
+}
+
 .setup-steps {
   display: grid;
   gap: 18px;
@@ -3903,4 +3998,30 @@ input[type="checkbox"] {
   display: flex;
   gap: 0.5rem;
   justify-content: end;
+}
+
+.card-header-buttons {
+  display: flex;
+}
+
+.offsite-test-content {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.offsite-test-content-header {
+  position: absolute;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  background: #fff;
+  transform: translateY(-50%);
+  left: 20px;
 }

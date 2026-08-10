@@ -201,30 +201,34 @@
 
     {% if user.can("settings.manage") %}
     <section class="overview-card settings-section">
-        <div class="card-header"><span>Off-site Backups</span><button class="settings-header-button" type="button" onclick="openOffsiteRemoteModal()"><i class="fa-solid fa-plus"></i> Add destination</button></div>
-        <div class="settings-content">
-            <div class="settings-info-row full-width">
-                <span>rclone status</span>
-                <strong id="offsite-settings-status">Checking...</strong>
+        <div class="card-header">
+            <span>Off-site Backups - <small id="offsite-settings-status">Checking...</small></span>
+            <div class="card-header-buttons">
+                <button class="settings-header-button" type="button" onclick="openOffsiteRemoteModal()"><i class="fa-solid fa-plus"></i> Add destination</button>
+                <button class="settings-header-button" type="button"  onclick="loadOffsiteBackupSettings()"><i class="fa-solid fa-refresh"></i> Refresh</button>
             </div>
+        </div>
+        <div class="settings-content">
             <div id="offsite-remote-list" class="offsite-remote-list full-width"><div class="empty-message">Loading destinations...</div></div>
-            <label class="property-field">
-                <span>Destination</span>
-                <select id="offsite-test-remote"><option value="">Choose a destination</option></select>
-                <small>Select one of the configured rclone destinations.</small>
-            </label>
-            <label class="property-field">
-                <span>Path (optional)</span>
-                <input id="offsite-test-path" placeholder="bucket/minecraft-backups">
-                <small>Enter only the bucket or directory path, without the destination name or colon.</small>
-            </label>
-            <div class="settings-save-row">
-                <span id="offsite-test-status" class="muted-small"></span>
-                <button class="button" type="button" onclick="document.getElementById('rclone-help-modal').hidden = false">
-                    <i class="fa-solid fa-circle-info"></i> Installation help
-                </button>
-                <button class="button" type="button" onclick="loadOffsiteBackupSettings()">Refresh</button>
-                <button class="button" type="button" onclick="testOffsiteBackupDestination()">Test connection</button>
+            <div class="offsite-test-content full-width">
+                <label class="offsite-test-content-header">Test Connection</label>
+                <label class="property-field">
+                    <span>Destination</span>
+                    <select id="offsite-test-remote"><option value="">Choose a destination</option></select>
+                    <small>Select one of the configured rclone destinations.</small>
+                </label>
+                <label class="property-field">
+                    <span>Path (optional)</span>
+                    <input id="offsite-test-path" placeholder="bucket/minecraft-backups">
+                    <small>Enter only the bucket or directory path, without the destination name or colon.</small>
+                </label>
+                <div id="offsite-test-status" class="offsite-test-status" role="status" hidden></div>
+                <div class="settings-save-row">
+                    <button class="button" type="button" onclick="document.getElementById('rclone-help-modal').hidden = false">
+                        <i class="fa-solid fa-circle-info"></i> Installation help
+                    </button>
+                    <button class="button" type="button" onclick="testOffsiteBackupDestination()">Test connection</button>
+                </div>
             </div>
         </div>
     </section>

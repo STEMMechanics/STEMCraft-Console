@@ -1,4 +1,6 @@
 from pathlib import Path
+import os
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,3 +38,21 @@ def test_installer_preserves_existing_java_and_installs_only_selected_versions()
     assert 'java_major_installed "$version"' in script
     assert '"java-$version-amazon-corretto-jdk"' in script
     assert '"java-$version-amazon-corretto-devel"' in script
+
+
+def test_helper_self_elevates_with_resolved_absolute_path(tmp_path):
+    sudo = tmp_path / "sudo"
+    sudo.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n")
+    sudo.chmod(0o755)
+    helper = ROOT / "deploy/stemcraft-console"
+    environment = os.environ | {"PATH": f"{tmp_path}:{os.environ['PATH']}"}
+
+    result = subprocess.run(
+        [str(helper), "restart"], capture_output=True, text=True,
+        env=environment, check=True,
+    )
+
+    arguments = result.stdout.splitlines()
+    assert arguments[0] == "--"
+    assert arguments[1] == str(helper.resolve())
+    assert arguments[2:] == ["restart"]

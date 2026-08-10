@@ -83,3 +83,19 @@ def select_java_runtime(runtimes: list[dict], minecraft_version: str | None) -> 
     recommended = recommended_java_major(minecraft_version)
     exact = next((item for item in runtimes if item["major"] == recommended), None)
     return (exact or (runtimes[0] if runtimes else None) or {}).get("path")
+
+
+def java_runtime_choices(runtimes: list[dict] | None = None) -> list[dict]:
+    """Return path-free runtime choices suitable for non-admin server forms."""
+    majors = sorted({item["major"] for item in (runtimes or discover_java_runtimes())}, reverse=True)
+    return [{"major": major, "label": f"Java {major}"} for major in majors]
+
+
+def select_java_major(major: int, runtimes: list[dict] | None = None) -> str:
+    selected = next(
+        (item for item in (runtimes or discover_java_runtimes()) if item["major"] == major),
+        None,
+    )
+    if not selected:
+        raise ValueError(f"Java {major} is not installed")
+    return selected["path"]

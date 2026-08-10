@@ -30,3 +30,16 @@ def test_select_java_runtime_prefers_exact_recommendation():
 
     assert java_runtime.select_java_runtime(runtimes, "26.2") == "/java/25"
     assert java_runtime.select_java_runtime(runtimes, "1.21.11") == "/java/21"
+
+
+def test_server_form_runtime_choices_do_not_expose_paths_or_vendor_details():
+    runtimes = [
+        {"path": "/secret/java-25-a", "major": 25, "name": "Vendor A"},
+        {"path": "/secret/java-25-b", "major": 25, "name": "Vendor B"},
+        {"path": "/secret/java-21", "major": 21, "name": "Vendor C"},
+    ]
+
+    assert java_runtime.java_runtime_choices(runtimes) == [
+        {"major": 25, "label": "Java 25"},
+        {"major": 21, "label": "Java 21"},
+    ]

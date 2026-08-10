@@ -138,9 +138,9 @@
 
                 <label class="property-field">
                     <span>Java Runtime</span>
-                    <select id="create-java-path" name="java_path" required>
+                    <select id="create-java-path" name="java_major" required>
                         {% for runtime in java_runtimes %}
-                        <option value="{{ runtime.path }}" data-java-major="{{ runtime.major }}">Java {{ runtime.major }} · {{ runtime.path }}</option>
+                        <option value="{{ runtime.major }}" data-java-major="{{ runtime.major }}">{{ runtime.label }}</option>
                         {% else %}
                         <option value="" disabled>No Java runtimes detected</option>
                         {% endfor %}

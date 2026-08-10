@@ -35,6 +35,12 @@ def test_destination_is_built_from_separate_remote_and_path(monkeypatch):
         offsite_backups.destination_from_parts("username:", "backups")
 
 
+def test_sftp_destination_root_is_valid_when_optional_path_is_blank(monkeypatch):
+    monkeypatch.setattr(offsite_backups, "configured_remotes", lambda: ["truenas"])
+
+    assert offsite_backups.destination_from_parts("truenas", "") == "truenas:"
+
+
 def test_connection_test_has_short_timeouts(monkeypatch):
     calls = []
     monkeypatch.setattr(offsite_backups, "configured_remotes", lambda: ["sftp"])
