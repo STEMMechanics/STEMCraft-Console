@@ -452,7 +452,7 @@ button {
   gap: 6px;
   position: relative;
   border: 1px solid var(--border);
-
+  white-space: nowrap;
   border-radius: 9px;
 
   background: #fff;
@@ -4203,7 +4203,7 @@ input[type="checkbox"] {
 .schedule-form-actions,
 .schedule-row-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 
