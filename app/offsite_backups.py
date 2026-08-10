@@ -235,7 +235,10 @@ def destination_from_parts(remote: str, path: str = "") -> str:
 
 def remote_backup_directory(destination: str, server) -> str:
     server_folder = Path(server.directory).resolve().name
-    return f"{validate_destination(destination)}/{server_folder}"
+    destination = validate_destination(destination)
+    if destination.endswith(":"):
+        destination += "."
+    return f"{destination}/{server_folder}"
 
 
 def upload_backup(server, filename: str, destination: str, progress_callback=None) -> str:
