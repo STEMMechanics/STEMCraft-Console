@@ -15,6 +15,26 @@ def test_online_players_supports_modern_paper_login_messages(monkeypatch):
     assert player_manager.get_online_players(7) == {"nomadjimbob"}
 
 
+def test_console_login_reconciles_empty_systemd_runtime_state(monkeypatch):
+    monkeypatch.setattr(player_manager, "server_status", lambda _server_id: {"running": True})
+    monkeypatch.setattr(player_manager, "get_runtime_online_players", lambda _server_id: set())
+    monkeypatch.setattr(player_manager, "get_console", lambda _server_id: [
+        "[06:09:15 INFO]: nomadjimbob[/125.63.25.220:60877] logged in with entity id 521 at ([minecraft:overworld]-918.0, 89.0, 291.0)",
+    ])
+
+    assert player_manager.get_online_players(7) == {"nomadjimbob"}
+
+
+def test_console_disconnect_removes_stale_systemd_runtime_player(monkeypatch):
+    monkeypatch.setattr(player_manager, "server_status", lambda _server_id: {"running": True})
+    monkeypatch.setattr(player_manager, "get_runtime_online_players", lambda _server_id: {"nomadjimbob"})
+    monkeypatch.setattr(player_manager, "get_console", lambda _server_id: [
+        "[06:02:51 INFO]: nomadjimbob lost connection: Disconnected",
+    ])
+
+    assert player_manager.get_online_players(7) == set()
+
+
 def test_online_players_supports_modern_paper_disconnect_messages(monkeypatch):
     monkeypatch.setattr(player_manager, "server_status", lambda _server_id: {"running": True})
     monkeypatch.setattr(player_manager, "get_runtime_online_players", lambda _server_id: None)
