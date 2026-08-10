@@ -44,6 +44,8 @@ SERVICE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}$")
 SYSTEMD_UNIT_PREFIX = os.getenv("STEMCRAFT_SYSTEMD_UNIT_PREFIX", "stemcraft-server@")
 SYSTEMD_SOCKET_DIR = Path(os.getenv("STEMCRAFT_SYSTEMD_SOCKET_DIR", "/run/stemcraft-console"))
 SYSTEMD_PLAYERS_QUERY = b"__stemcraft_online_players__"
+unsupported_player_query_sockets: dict[int, tuple[int, int]] = {}
+player_query_lock = threading.Lock()
 
 
 def register_server(server) -> None:
@@ -68,6 +70,7 @@ def unregister_server(server_id: int) -> None:
     stats_processes.pop(server_id, None)
     stats_process_roots.pop(server_id, None)
     stats_process_started_at.pop(server_id, None)
+    unsupported_player_query_sockets.pop(server_id, None)
 
 
 def _systemd_config(server_id: int) -> ServerProcessConfig | None:
@@ -549,18 +552,29 @@ def get_runtime_online_players(server_id: int) -> set[str] | None:
     if not config:
         return None
     endpoint = SYSTEMD_SOCKET_DIR / f"{config.service_name}.sock"
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-            client.settimeout(2)
-            client.connect(str(endpoint))
-            client.sendall(SYSTEMD_PLAYERS_QUERY)
-            response = client.recv(65536)
-        data = json.loads(response.decode("utf-8"))
-        if not isinstance(data, list):
+    with player_query_lock:
+        try:
+            stat = endpoint.stat()
+            socket_identity = (stat.st_dev, stat.st_ino)
+        except OSError:
             return None
-        return {name for name in data if isinstance(name, str)}
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return None
+        if unsupported_player_query_sockets.get(server_id) == socket_identity:
+            return None
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.settimeout(2)
+                client.connect(str(endpoint))
+                client.sendall(SYSTEMD_PLAYERS_QUERY)
+                response = client.recv(65536)
+            data = json.loads(response.decode("utf-8"))
+            if not isinstance(data, list):
+                unsupported_player_query_sockets[server_id] = socket_identity
+                return None
+            unsupported_player_query_sockets.pop(server_id, None)
+            return {name for name in data if isinstance(name, str)}
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            unsupported_player_query_sockets[server_id] = socket_identity
+            return None
 
 
 def get_console(

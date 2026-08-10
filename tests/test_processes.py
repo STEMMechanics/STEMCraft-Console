@@ -175,6 +175,41 @@ def test_systemd_console_wait_reads_messages_after_journal_cursor(monkeypatch):
     ]
 
 
+def test_unsupported_supervisor_player_query_is_not_repeated(monkeypatch, tmp_path):
+    config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
+    endpoint = tmp_path / "survival.sock"
+    endpoint.touch()
+    calls = []
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def settimeout(self, _timeout):
+            pass
+
+        def connect(self, path):
+            calls.append(path)
+
+        def sendall(self, _data):
+            pass
+
+        def recv(self, _size):
+            return b"ok\n"
+
+    monkeypatch.setattr(processes, "_systemd_config", lambda _server_id: config)
+    monkeypatch.setattr(processes, "SYSTEMD_SOCKET_DIR", tmp_path)
+    monkeypatch.setattr(processes.socket, "socket", lambda *_args: FakeSocket())
+    processes.unsupported_player_query_sockets.pop(7, None)
+
+    assert processes.get_runtime_online_players(7) is None
+    assert processes.get_runtime_online_players(7) is None
+    assert calls == [str(endpoint)]
+
+
 def test_process_stats_reuses_psutil_process_for_cpu_deltas(monkeypatch):
     created = []
 

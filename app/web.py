@@ -66,6 +66,16 @@ templates = Jinja2Templates(
 )
 
 
+def _finish_web_login(request: Request, user: User) -> RedirectResponse:
+    request.session["user_id"] = user.id
+    request.session.pop("pending_tfa_user_id", None)
+    request.session.pop("pending_tfa_expires", None)
+    return RedirectResponse(
+        "/change-password" if user.must_change_password else "/dashboard",
+        status_code=303,
+    )
+
+
 @router.get(
     "/login",
     response_class=HTMLResponse,
@@ -137,26 +147,58 @@ def login_web(
             status_code=303,
         )
 
-    request.session["user_id"] = user.id
+    return _finish_web_login(request, user)
 
-    request.session.pop(
-        "pending_tfa_user_id",
-        None,
+
+@router.get("/change-password", response_class=HTMLResponse)
+def change_password_page(request: Request, db: Session = Depends(get_db)):
+    user_id = request.session.get("user_id")
+    user = db.get(User, user_id) if user_id else None
+    if not user or not user.enabled:
+        request.session.clear()
+        return RedirectResponse("/login", status_code=303)
+    if not user.must_change_password:
+        return RedirectResponse("/dashboard", status_code=303)
+    return templates.TemplateResponse(
+        request=request,
+        name="change_password.html",
+        context={"app_version": APP_VERSION},
     )
 
-    request.session.pop(
-        "pending_tfa_expires",
-        None,
-    )
 
-    request.session[
-        "user_id"
-    ] = user.id
+@router.post("/change-password", response_class=HTMLResponse)
+def change_password(
+    request: Request,
+    password: str = Form(),
+    confirm_password: str = Form(),
+    db: Session = Depends(get_db),
+):
+    user_id = request.session.get("user_id")
+    user = db.get(User, user_id) if user_id else None
+    if not user or not user.enabled:
+        request.session.clear()
+        return RedirectResponse("/login", status_code=303)
 
-    return RedirectResponse(
-        "/dashboard",
-        status_code=303,
-    )
+    error = None
+    if len(password) < 8:
+        error = "Password must be at least 8 characters."
+    elif password != confirm_password:
+        error = "Passwords do not match."
+    elif verify_password(password, user.password_hash):
+        error = "Choose a password different from the temporary password."
+
+    if error:
+        return templates.TemplateResponse(
+            request=request,
+            name="change_password.html",
+            context={"app_version": APP_VERSION, "error": error},
+            status_code=400,
+        )
+
+    user.password_hash = hash_password(password)
+    user.must_change_password = False
+    db.commit()
+    return RedirectResponse("/dashboard", status_code=303)
 
 
 @router.get("/dashboard")
@@ -566,6 +608,7 @@ def reset_password(
             password
         )
     )
+    user.must_change_password = False
 
     record.used_at = (
         datetime.utcnow()
@@ -685,25 +728,7 @@ def login_tfa(
         )
 
 
-    request.session[
-        "user_id"
-    ] = user.id
-
-    request.session.pop(
-        "pending_tfa_user_id",
-        None,
-    )
-
-    request.session.pop(
-        "pending_tfa_expires",
-        None,
-    )
-
-
-    return RedirectResponse(
-        "/dashboard",
-        status_code=303,
-    )
+    return _finish_web_login(request, user)
 
 def get_pending_tfa_user(
     request: Request,

@@ -352,6 +352,7 @@ async def update_profile(
         user.password_hash = hash_password(
             password
         )
+        user.must_change_password = False
 
     db.commit()
 
