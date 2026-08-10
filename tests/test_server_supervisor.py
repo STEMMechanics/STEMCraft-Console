@@ -13,6 +13,22 @@ def test_supervisor_tracks_joining_and_leaving_players():
     assert players == {"Steve"}
 
 
+def test_supervisor_tracks_modern_paper_login_and_disconnect_messages():
+    players = set()
+
+    _update_online_players(
+        "[06:01:40 INFO]: nomadjimbob[/125.63.2.220:60595] logged in with entity id 299 at ([minecraft:overworld]-918.0, 89.0, 291.0)",
+        players,
+    )
+    assert players == {"nomadjimbob"}
+
+    _update_online_players(
+        "[06:04:12 INFO]: nomadjimbob (/125.63.2.220:60595) lost connection: Disconnected",
+        players,
+    )
+    assert players == set()
+
+
 class ExitedProcess:
     stdin = None
 

@@ -5,6 +5,27 @@ import pytest
 from app import player_manager
 
 
+def test_online_players_supports_modern_paper_login_messages(monkeypatch):
+    monkeypatch.setattr(player_manager, "server_status", lambda _server_id: {"running": True})
+    monkeypatch.setattr(player_manager, "get_runtime_online_players", lambda _server_id: None)
+    monkeypatch.setattr(player_manager, "get_console", lambda _server_id: [
+        "[06:01:40 INFO]: nomadjimbob[/125.63.2.220:60595] logged in with entity id 299 at ([minecraft:overworld]-918.0, 89.0, 291.0)",
+    ])
+
+    assert player_manager.get_online_players(7) == {"nomadjimbob"}
+
+
+def test_online_players_supports_modern_paper_disconnect_messages(monkeypatch):
+    monkeypatch.setattr(player_manager, "server_status", lambda _server_id: {"running": True})
+    monkeypatch.setattr(player_manager, "get_runtime_online_players", lambda _server_id: None)
+    monkeypatch.setattr(player_manager, "get_console", lambda _server_id: [
+        "[06:01:40 INFO]: nomadjimbob[/125.63.2.220:60595] logged in with entity id 299 at ([minecraft:overworld]-918.0, 89.0, 291.0)",
+        "[06:04:12 INFO]: nomadjimbob (/125.63.2.220:60595) lost connection: Disconnected",
+    ])
+
+    assert player_manager.get_online_players(7) == set()
+
+
 def test_ban_ip_normalizes_address_and_sends_command(monkeypatch):
     commands = []
     monkeypatch.setattr(player_manager, "require_running", lambda server: None)
