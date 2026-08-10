@@ -409,7 +409,7 @@ a {
   display: flex;
   align-items: center;
 
-  gap: 12px;
+  gap: 8px;
 }
 
 .topbar-status {
@@ -450,7 +450,7 @@ button {
   display: flex;
   align-items: center;
   gap: 6px;
-
+  position: relative;
   border: 1px solid var(--border);
 
   border-radius: 9px;
@@ -483,16 +483,38 @@ button.danger:hover {
   background: #dc3939;
 }
 
+.button.success,
+button.success {
+  border-color: #20ad58;
+  background-color: #20ad58;
+  color: white;
+}
+
 .button.start,
 button.start {
-  background: #20ad58;
   border-color: #20ad58;
   color: white;
 }
 
 .button.start:hover,
 button.start:hover {
+  border-color: #189649;
   background: #189649;
+  color: white;
+}
+
+.button.stop:hover,
+button.stop:hover {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: white;
+}
+
+.button.restart:hover,
+button.restart:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
 }
 
 .server-overview {
@@ -568,7 +590,8 @@ button.start:hover {
   align-items: center;
   justify-content: space-between;
 
-  padding: 0 20px;
+  padding-left: 20px;
+  padding-right: 4px;
 
   border-bottom: 1px solid var(--border);
 
@@ -2425,14 +2448,30 @@ input[type="checkbox"] {
   gap: 12px;
 }
 
-.settings-header-button {
+.settings-header-button,
+.panel-header-button {
   border: 0;
+  padding: 6px 12px;
   background: transparent;
   color: var(--accent);
 
   cursor: pointer;
 
   font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-decoration: none;
+  text-transform: none;
+}
+
+.settings-header-button i,
+.panel-header-button i {
+  margin-right: 5px;
+}
+
+.settings-header-button:hover,
+.panel-header-button:hover {
+  color: var(--accent-hover, #d96c00);
 }
 
 .settings-user-list {
@@ -2693,7 +2732,7 @@ input[type="checkbox"] {
 
   .topbar-actions {
     min-width: 0;
-    gap: 7px;
+    gap: 8px;
   }
 
   .topbar-status {
@@ -2850,9 +2889,17 @@ input[type="checkbox"] {
   .backup-actions,
   .plugin-actions,
   .player-add-row,
-  .ip-ban-form {
+  .ip-ban-entry {
     align-items: stretch;
     flex-direction: column;
+    width: 100%;
+  }
+
+  .ip-ban-entry {
+    grid-template-columns: 1fr;
+  }
+
+  .ip-ban-entry-actions .button {
     width: 100%;
   }
 
@@ -3149,6 +3196,10 @@ input[type="checkbox"] {
   font-size: 12px;
 }
 
+.schedule-runs .schedule-run:first-child {
+  border-top: none;
+}
+
 .schedule-row,
 .schedule-run {
   display: flex;
@@ -3165,33 +3216,8 @@ input[type="checkbox"] {
   color: var(--muted);
 }
 
-.saved-schedules {
-  margin: 0 20px 20px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: #fafbfc;
-}
-
-.saved-schedules-heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .03em;
-  text-transform: uppercase;
-}
-
-.saved-schedules-heading i {
-  color: var(--accent);
-}
-
 .automation-page .schedule-list {
-  padding: 0 14px;
+  padding: 0 20px 8px;
   background-color: #fff;
 }
 
@@ -3219,6 +3245,38 @@ input[type="checkbox"] {
   padding: 18px 0;
 }
 
+.automation-page .schedule-run {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  justify-content: initial;
+}
+
+.automation-page .schedule-run time,
+.automation-page .schedule-run-detail {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+}
+
+.automation-page .schedule-run time strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.automation-page .schedule-run time span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.automation-page .schedule-run-detail > strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.automation-page .schedule-run-detail small {
+  line-height: 1.45;
+}
+
 .automation-page,
 .automation-panels {
   display: flex;
@@ -3230,6 +3288,28 @@ input[type="checkbox"] {
   display: grid;
   gap: 14px;
   padding: 20px;
+}
+
+.schedule-editor-modal {
+  width: min(680px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.schedule-editor-modal .friendly-schedule-form {
+  padding: 16px 0 0;
+}
+
+.schedule-runs-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.schedule-runs-pagination[hidden] {
+  display: none;
 }
 
 .friendly-schedule-form label,
@@ -3510,7 +3590,7 @@ input[type="checkbox"] {
 }
 
 .plugin-config-picker select {
-  width: 42px;
+  width: 34px;
   min-height: 40px;
   height: 40px;
   padding: 8px;
@@ -3523,11 +3603,17 @@ input[type="checkbox"] {
 }
 
 .plugin-config-picker::after {
-  content: "▾";
+  content: "";
   position: absolute;
   right: 13px;
-  color: var(--text);
+  top: 13px;
+  height: 7px;
+  width: 7px;
   pointer-events: none;
+  border-width: 0 2px 2px 0;
+  border-style: solid;
+  border-color: #000;
+  transform: rotate(45deg);
 }
 
 .plugin-config-picker option {
@@ -3560,6 +3646,15 @@ input[type="checkbox"] {
   display: block;
   min-height: 28px;
   padding: 0 20px 12px;
+}
+
+#paper-update-button.is-unavailable {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.paper-update-message.error {
+  color: var(--danger);
 }
 
 /* Player management */
@@ -3613,7 +3708,6 @@ input[type="checkbox"] {
   display: none;
 }
 
-.ip-ban-form,
 .ip-ban-row,
 .system-instance-row {
   display: flex;
@@ -3624,6 +3718,66 @@ input[type="checkbox"] {
 .ip-ban-list,
 .system-instance-list {
   padding: 0 20px;
+}
+
+.ip-ban-list {
+  padding: 0 20px;
+}
+
+.ip-ban-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 16px;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ip-ban-entry-header {
+  padding: 0 4px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.ip-ban-entry-actions {
+  margin-top: 21px;
+}
+
+.server-control-button {
+  min-height: auto;
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.server-control-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.server-control-button.start {
+  color: var(--success);
+}
+
+.server-control-button.stop {
+  color: var(--danger);
+}
+
+.server-control-button.restart {
+  color: var(--accent);
 }
 
 .ip-ban-row,
@@ -4002,6 +4156,16 @@ input[type="checkbox"] {
 
 .card-header-buttons {
   display: flex;
+  gap: 1px;
+}
+
+.card-header-buttons button + button:before {
+  content: "";
+  position: absolute;
+  width: 1px;
+  height: 16px;
+  left: -1px;
+  border-left: 1px solid #999;
 }
 
 .offsite-test-content {
@@ -4023,5 +4187,45 @@ input[type="checkbox"] {
   letter-spacing: .04em;
   background: #fff;
   transform: translateY(-50%);
-  left: 20px;
+  left: 12px;
+  padding: 0 4px;
+}
+
+.schedule-form-actions,
+.schedule-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scheduled-backup-progress:empty {
+  display: none;
+}
+
+.scheduled-backup-job {
+  margin: 16px 0 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-subtle, rgba(127, 127, 127, 0.06));
+}
+
+.upload-progress-bar.indeterminate {
+  animation: scheduled-backup-indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes scheduled-backup-indeterminate {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(310%); }
+}
+
+@media (max-width: 600px) {
+  .schedule-row-actions {
+    width: 100%;
+  }
+}
+
+#metrics-range {
+  min-height: auto;
+  padding: 6px 38px 6px 12px;
 }

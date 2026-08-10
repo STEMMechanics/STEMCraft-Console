@@ -1,6 +1,16 @@
 import threading
 
-from app.server_supervisor import _serve_commands
+from app.server_supervisor import _serve_commands, _update_online_players
+
+
+def test_supervisor_tracks_joining_and_leaving_players():
+    players = set()
+
+    _update_online_players("[Server thread/INFO]: Alex joined the game", players)
+    _update_online_players("[Server thread/INFO]: Steve joined the game", players)
+    _update_online_players("[Server thread/INFO]: Alex left the game", players)
+
+    assert players == {"Steve"}
 
 
 class ExitedProcess:

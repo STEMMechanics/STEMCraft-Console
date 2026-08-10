@@ -2,13 +2,14 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy import and_, func, not_
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .models import ScheduledTask, ServerMetric, TaskRun
+from .models import BackupJob, ScheduledTask, ServerMetric, TaskRun
 from .web_servers import get_accessible_server
 from .permissions import has_permission
-from .automation import next_task_run, validate_cron_expression
+from .automation import next_task_run, start_task_now, validate_cron_expression
 from .web_context import build_web_context
 from .web_render import render_page
 from .config import SCHEDULE_TIMEZONE_NAME
@@ -30,6 +31,55 @@ def _task_json(task):
         "retention_count": task.retention_count, "enabled": task.enabled,
         "next_run_at": task.next_run_at.isoformat(),
         "last_run_at": task.last_run_at.isoformat() if task.last_run_at else None,
+    }
+
+
+def _schedule_values(data: dict) -> dict:
+    task_type = str(data.get("task_type", ""))
+    name = str(data.get("name", "")).strip()
+    command = str(data.get("command", "")).strip() or None
+    frequency = str(data.get("frequency", "")).strip()
+    cron_expression = str(data.get("cron_expression", "")).strip() or None
+    try:
+        interval = int(data.get("interval_minutes", 0) or 0)
+        retention = int(data["retention_count"]) if data.get("retention_count") else None
+        run_hour = int(data["run_hour"]) if data.get("run_hour") not in (None, "") else None
+        run_weekday = int(data["run_weekday"]) if data.get("run_weekday") not in (None, "") else None
+        remote_retention = int(data["remote_retention_count"]) if data.get("remote_retention_count") else None
+    except (TypeError, ValueError) as error:
+        raise ValueError("Invalid interval or retention") from error
+    if frequency in {"hourly", "daily", "weekly", "monthly", "custom"}:
+        interval = {"hourly": 60, "daily": 1440, "weekly": 10080, "monthly": 43200, "custom": 1}[frequency]
+    elif not frequency:
+        frequency = None
+    else:
+        raise ValueError("Choose a valid schedule")
+    if frequency in {"daily", "weekly", "monthly"} and (run_hour is None or not 0 <= run_hour <= 23):
+        raise ValueError("Choose an hour from 0 to 23")
+    if frequency == "weekly" and (run_weekday is None or not 0 <= run_weekday <= 6):
+        raise ValueError("Choose a day of the week")
+    if frequency == "custom":
+        validate_cron_expression(cron_expression or "")
+    if task_type not in {"backup", "command"} or not name or interval < 1 or interval > 525600:
+        raise ValueError("Type, name and a positive interval are required")
+    if task_type == "command" and not command:
+        raise ValueError("Command required")
+    if task_type == "backup" and retention is not None and not 1 <= retention <= 10000:
+        raise ValueError("Retention must be between 1 and 10000")
+    if command and (len(command) > 500 or "\n" in command or "\r" in command):
+        raise ValueError("Invalid command")
+    remote_destination = str(data.get("remote_destination", "")).strip() or None
+    if task_type == "backup" and remote_destination:
+        remote_destination = validate_destination(remote_destination)
+        if remote_retention is not None and not 1 <= remote_retention <= 10000:
+            raise ValueError("Off-site retention must be between 1 and 10000")
+    return {
+        "task_type": task_type, "name": name[:100], "command": command,
+        "frequency": frequency, "cron_expression": cron_expression,
+        "interval_minutes": interval, "retention_count": retention,
+        "run_hour": run_hour, "run_weekday": run_weekday,
+        "remote_destination": remote_destination,
+        "remote_retention_count": remote_retention if remote_destination else None,
     }
 
 
@@ -59,14 +109,27 @@ def old_automation_page(server_id: int):
 
 
 @router.get("/api/web/servers/{server_id}/schedules")
-def schedules(server_id: int, request: Request, db: Session = Depends(get_db)):
+def schedules(server_id: int, request: Request, runs_page: int = 1, runs_per_page: int = 10, db: Session = Depends(get_db)):
     user, server = get_accessible_server(server_id, request, db)
     if not user:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
     if not server:
         return JSONResponse({"error": "Access denied"}, status_code=403)
     tasks = db.query(ScheduledTask).filter(ScheduledTask.server_id == server.id).order_by(ScheduledTask.name).all()
-    runs = db.query(TaskRun).filter(TaskRun.server_id == server.id).order_by(TaskRun.id.desc()).limit(50).all()
+    runs_page = max(1, runs_page)
+    runs_per_page = min(50, max(1, runs_per_page))
+    runs_query = db.query(TaskRun).filter(
+        TaskRun.server_id == server.id,
+        not_(and_(
+            TaskRun.task_type == "command",
+            TaskRun.status == "failed",
+            func.lower(func.coalesce(TaskRun.detail, "")).contains("server is not running"),
+        )),
+    )
+    runs_total = runs_query.count()
+    runs_pages = max(1, (runs_total + runs_per_page - 1) // runs_per_page)
+    runs_page = min(runs_page, runs_pages)
+    runs = runs_query.order_by(TaskRun.id.desc()).offset((runs_page - 1) * runs_per_page).limit(runs_per_page).all()
     try:
         remotes, remote_error = configured_remotes(), None
     except OffsiteBackupError as error:
@@ -79,8 +142,16 @@ def schedules(server_id: int, request: Request, db: Session = Depends(get_db)):
             "started_at": run.started_at.isoformat(),
             "finished_at": run.finished_at.isoformat() if run.finished_at else None,
         } for run in runs],
+        "runs_pagination": {"page": runs_page, "pages": runs_pages, "total": runs_total},
         "offsite_remotes": remotes,
         "offsite_error": remote_error,
+        "backup_jobs": [{
+            "id": job.id, "status": job.status, "progress": job.progress,
+            "message": job.message, "label": job.label,
+        } for job in db.query(BackupJob).filter(
+            BackupJob.server_id == server.id,
+            BackupJob.status.in_(["queued", "saving", "archiving", "uploading"]),
+        ).order_by(BackupJob.id.desc()).all()],
     }
 
 
@@ -91,65 +162,59 @@ async def create_schedule(server_id: int, request: Request, db: Session = Depend
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
     if not server or not has_permission(user, "automation.manage"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
-    data = await request.json()
-    task_type = str(data.get("task_type", ""))
-    name = str(data.get("name", "")).strip()
-    command = str(data.get("command", "")).strip() or None
-    frequency = str(data.get("frequency", "")).strip()
-    cron_expression = str(data.get("cron_expression", "")).strip() or None
     try:
-        interval = int(data.get("interval_minutes", 0) or 0)
-        retention = int(data["retention_count"]) if data.get("retention_count") else None
-        run_hour = int(data["run_hour"]) if data.get("run_hour") not in (None, "") else None
-        run_weekday = int(data["run_weekday"]) if data.get("run_weekday") not in (None, "") else None
-        remote_retention = int(data["remote_retention_count"]) if data.get("remote_retention_count") else None
-    except (TypeError, ValueError):
-        return JSONResponse({"error": "Invalid interval or retention"}, status_code=400)
-    if frequency in {"hourly", "daily", "weekly", "monthly", "custom"}:
-        interval = {"hourly": 60, "daily": 1440, "weekly": 10080, "monthly": 43200, "custom": 1}[frequency]
-    elif not frequency:
-        frequency = None
-    else:
-        return JSONResponse({"error": "Choose a valid schedule"}, status_code=400)
-    if frequency in {"daily", "weekly", "monthly"} and (run_hour is None or not 0 <= run_hour <= 23):
-        return JSONResponse({"error": "Choose an hour from 0 to 23"}, status_code=400)
-    if frequency == "weekly" and (run_weekday is None or not 0 <= run_weekday <= 6):
-        return JSONResponse({"error": "Choose a day of the week"}, status_code=400)
-    if frequency == "custom":
-        try:
-            validate_cron_expression(cron_expression or "")
-        except (TypeError, ValueError) as error:
-            return JSONResponse({"error": str(error)}, status_code=400)
-    if task_type not in {"backup", "command"} or not name or interval < 1 or interval > 525600:
-        return JSONResponse({"error": "Type, name and a positive interval are required"}, status_code=400)
-    if task_type == "command" and not command:
-        return JSONResponse({"error": "Command required"}, status_code=400)
-    if task_type == "backup" and retention is not None and not 1 <= retention <= 10000:
-        return JSONResponse({"error": "Retention must be between 1 and 10000"}, status_code=400)
-    if command and (len(command) > 500 or "\n" in command or "\r" in command):
-        return JSONResponse({"error": "Invalid command"}, status_code=400)
-    remote_destination = str(data.get("remote_destination", "")).strip() or None
-    if task_type == "backup" and remote_destination:
-        try:
-            remote_destination = validate_destination(remote_destination)
-        except OffsiteBackupError as error:
-            return JSONResponse({"error": str(error)}, status_code=400)
-        if remote_retention is not None and not 1 <= remote_retention <= 10000:
-            return JSONResponse({"error": "Off-site retention must be between 1 and 10000"}, status_code=400)
-    task = ScheduledTask(
-        server_id=server.id, task_type=task_type, name=name[:100], command=command,
-        interval_minutes=interval, retention_count=retention, enabled=True,
-        frequency=frequency, run_hour=run_hour, run_weekday=run_weekday,
-        cron_expression=cron_expression,
-        remote_destination=remote_destination,
-        remote_retention_count=remote_retention if remote_destination else None,
-        next_run_at=datetime.utcnow() + timedelta(minutes=interval),
-    )
+        values = _schedule_values(await request.json())
+    except (OffsiteBackupError, ValueError) as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    task = ScheduledTask(server_id=server.id, enabled=True, next_run_at=datetime.utcnow(), **values)
     task.next_run_at = next_task_run(task, datetime.utcnow())
     db.add(task)
     db.commit()
     db.refresh(task)
     return _task_json(task)
+
+
+@router.put("/api/web/servers/{server_id}/schedules/{task_id}")
+async def update_schedule(server_id: int, task_id: int, request: Request, db: Session = Depends(get_db)):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "automation.manage"):
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+    task = db.get(ScheduledTask, task_id)
+    if not task or task.server_id != server.id or not task.enabled:
+        return JSONResponse({"error": "Schedule not found"}, status_code=404)
+    try:
+        values = _schedule_values(await request.json())
+    except (OffsiteBackupError, ValueError) as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    if values["task_type"] != task.task_type:
+        return JSONResponse({"error": "Schedule type cannot be changed"}, status_code=400)
+    for key, value in values.items():
+        setattr(task, key, value)
+    task.next_run_at = next_task_run(task, datetime.utcnow())
+    db.commit()
+    return _task_json(task)
+
+
+@router.post("/api/web/servers/{server_id}/schedules/{task_id}/run")
+def run_schedule_now(server_id: int, task_id: int, request: Request, db: Session = Depends(get_db)):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "automation.manage"):
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+    task = db.get(ScheduledTask, task_id)
+    if not task or task.server_id != server.id or not task.enabled or task.task_type != "backup":
+        return JSONResponse({"error": "Backup schedule not found"}, status_code=404)
+    existing = db.query(BackupJob).filter(
+        BackupJob.server_id == server.id,
+        BackupJob.status.in_(["queued", "saving", "archiving", "uploading"]),
+    ).first()
+    if existing:
+        return JSONResponse({"error": "A backup is already running"}, status_code=409)
+    start_task_now(task.id)
+    return {"success": True}
 
 
 @router.delete("/api/web/servers/{server_id}/schedules/{task_id}")

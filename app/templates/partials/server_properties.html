@@ -13,7 +13,7 @@
             </div>
             <label class="property-field"><span>Minecraft version</span><select id="paper-version-select" onchange="loadPaperBuilds(this.value)"><option>Loading versions...</option></select></label>
             <label class="property-field"><span>Paper build</span><select id="paper-build-select"><option>Loading builds...</option></select></label>
-            <button id="paper-update-button" class="button start" onclick="installPaperVersion()" type="button" disabled>Download and replace JAR</button>
+            <button id="paper-update-button" class="button start is-unavailable" onclick="installPaperVersion()" type="button" aria-disabled="true" data-unavailable-reason="Checking server status...">Download and replace JAR</button>
         </div>
         <p id="paper-update-message" class="paper-update-message muted-small"></p>
     </section>
@@ -54,13 +54,13 @@
 
                 <label class="property-field">
                     <span>Initial RAM</span>
-                    <input id="property-min-memory" type="text" inputmode="text" placeholder="2G or 2GB" oninput="updateStartupCommandPreview()" onblur="normalizeStartupMemoryInput(this)">
+                    <select id="property-min-memory" onchange="updateStartupCommandPreview()"><option value="1G">1 GB</option><option value="2G">2 GB</option><option value="4G">4 GB</option><option value="6G">6 GB</option><option value="8G">8 GB</option><option value="12G">12 GB</option><option value="16G">16 GB</option></select>
                     <small>Java <code>-Xms</code>. Memory reserved when the server starts.</small>
                 </label>
 
                 <label class="property-field">
                     <span>Maximum RAM</span>
-                    <input id="property-max-memory" type="text" inputmode="text" placeholder="2G or 2GB" oninput="updateStartupCommandPreview()" onblur="normalizeStartupMemoryInput(this)">
+                    <select id="property-max-memory" onchange="updateStartupCommandPreview()"><option value="1G">1 GB</option><option value="2G">2 GB</option><option value="4G">4 GB</option><option value="6G">6 GB</option><option value="8G">8 GB</option><option value="12G">12 GB</option><option value="16G">16 GB</option></select>
                     <small>Java <code>-Xmx</code>. The upper memory allocation limit.</small>
                 </label>
 

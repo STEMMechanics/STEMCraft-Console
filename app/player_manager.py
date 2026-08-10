@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .processes import (
     get_console,
+    get_runtime_online_players,
     send_command,
     server_status,
 )
@@ -150,6 +151,10 @@ def get_online_players(
         False,
     ):
         return set()
+
+    runtime_players = get_runtime_online_players(server_id)
+    if runtime_players is not None:
+        return runtime_players
 
     online = set()
 

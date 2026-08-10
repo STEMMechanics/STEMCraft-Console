@@ -28,16 +28,16 @@
         </div>
 
         {% if user.can("servers.control") %}
-        <button id="topbar-start" class="button start" onclick="serverAction('start')" style="display:none">
-            Start
+        <button id="topbar-start" class="server-control-button start" onclick="serverAction('start')" style="display:none" aria-label="Start server" title="Start server">
+            <i class="fa-solid fa-play" aria-hidden="true"></i>
         </button>
 
-        <button id="topbar-restart" class="button" onclick="serverAction('restart')">
-            Restart
+        <button id="topbar-restart" class="server-control-button restart" onclick="serverAction('restart')" aria-label="Restart server" title="Restart server">
+            <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
         </button>
 
-        <button id="topbar-stop" class="button danger" onclick="serverAction('stop')">
-            Stop
+        <button id="topbar-stop" class="server-control-button stop" onclick="serverAction('stop')" aria-label="Stop server" title="Stop server">
+            <i class="fa-solid fa-stop" aria-hidden="true"></i>
         </button>
         {% endif %}
 

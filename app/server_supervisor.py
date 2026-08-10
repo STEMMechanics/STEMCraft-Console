@@ -1,17 +1,51 @@
 """Systemd-owned Minecraft process with a local Unix command socket."""
 
 import argparse
+import json
 import os
+import re
 import signal
 import socket
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
 from .processes import build_java_command, resolve_server_jar
+from .processes import SYSTEMD_PLAYERS_QUERY
 
 
-def _serve_commands(server, process, stopping: threading.Event) -> None:
+JOIN_PATTERN = re.compile(r": ([A-Za-z0-9_]{1,16}) joined the game")
+LEAVE_PATTERN = re.compile(r": ([A-Za-z0-9_]{1,16}) left the game")
+
+
+def _update_online_players(line: str, online_players: set[str]) -> None:
+    joined = JOIN_PATTERN.search(line)
+    if joined:
+        online_players.add(joined.group(1))
+        return
+    left = LEAVE_PATTERN.search(line)
+    if left:
+        online_players.discard(left.group(1))
+
+
+def _forward_output(process, online_players: set[str], player_lock: threading.Lock) -> None:
+    if not process.stdout:
+        return
+    for raw_line in iter(process.stdout.readline, b""):
+        try:
+            sys.stdout.buffer.write(raw_line)
+            sys.stdout.buffer.flush()
+        except OSError:
+            pass
+        line = raw_line.decode("utf-8", "replace")
+        with player_lock:
+            _update_online_players(line, online_players)
+
+
+def _serve_commands(server, process, stopping: threading.Event, online_players: set[str] | None = None, player_lock=None) -> None:
+    online_players = online_players if online_players is not None else set()
+    player_lock = player_lock or threading.Lock()
     while not stopping.is_set() and process.poll() is None:
         try:
             connection, _ = server.accept()
@@ -24,6 +58,10 @@ def _serve_commands(server, process, stopping: threading.Event) -> None:
         try:
             with connection:
                 data = connection.recv(4096).decode("utf-8", "replace").strip()
+                if data.encode() == SYSTEMD_PLAYERS_QUERY:
+                    with player_lock:
+                        connection.sendall(json.dumps(sorted(online_players)).encode("utf-8"))
+                    continue
                 if data and "\n" not in data and process.stdin:
                     process.stdin.write((data + "\n").encode())
                     process.stdin.flush()
@@ -44,8 +82,19 @@ def supervise(directory: str, socket_path: str, memory: str, min_memory: str, ja
         build_java_command(memory, jar_name, java_args, min_memory, java_path),
         cwd=root,
         stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
     )
     stopping = threading.Event()
+    online_players: set[str] = set()
+    player_lock = threading.Lock()
+    output_thread = threading.Thread(
+        target=_forward_output,
+        args=(process, online_players, player_lock),
+        name="minecraft-console-output",
+        daemon=True,
+    )
+    output_thread.start()
 
     def request_stop(*_args):
         if stopping.is_set():
@@ -66,7 +115,7 @@ def supervise(directory: str, socket_path: str, memory: str, min_memory: str, ja
 
     thread = threading.Thread(
         target=_serve_commands,
-        args=(server, process, stopping),
+        args=(server, process, stopping, online_players, player_lock),
         name="minecraft-command-socket",
     )
     thread.start()
@@ -80,6 +129,7 @@ def supervise(directory: str, socket_path: str, memory: str, min_memory: str, ja
         stopping.set()
         server.close()
         thread.join(timeout=2)
+        output_thread.join(timeout=2)
         endpoint.unlink(missing_ok=True)
 
 

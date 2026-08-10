@@ -393,11 +393,11 @@ async function updateSystemStats() {
                       <small>Paper ${
           escapeHtml(server.version || "unknown")
         } · Java ${server.java || "unknown"} · ${server.players} online</small></div>
-                      <button class="button ${
-          server.running ? "danger" : "start"
-        }" onclick="systemServerAction(${Number(server.id)}, '${
+                      <button class="server-control-button ${
           server.running ? "stop" : "start"
-        }')">${server.running ? "Stop" : "Start"}</button>
+        }" aria-label="${server.running ? "Stop" : "Start"} ${escapeHtml(server.name)}" title="${server.running ? "Stop" : "Start"} server" onclick="systemServerAction(${Number(server.id)}, '${
+          server.running ? "stop" : "start"
+        }')"><i class="fa-solid fa-${server.running ? "stop" : "play"}" aria-hidden="true"></i></button>
                     </div>`).join("")
         : '<div class="empty-message">No accessible Minecraft instances.</div>';
     }
@@ -4605,6 +4605,7 @@ function renderBackupJobs(
         "queued",
         "saving",
         "archiving",
+        "uploading",
       ].includes(
         job.status,
       ),
@@ -4637,7 +4638,7 @@ function renderBackupJobs(
                         </div>
 
                         <strong>
-                            ${job.progress}%
+                            ${job.status === "uploading" ? "Active" : `${job.progress}%`}
                         </strong>
 
                     </div>
@@ -4645,8 +4646,8 @@ function renderBackupJobs(
                     <div class="upload-progress-track">
 
                         <div
-                            class="upload-progress-bar"
-                            style="width: ${job.progress}%"
+                            class="upload-progress-bar${job.status === "uploading" ? " indeterminate" : ""}"
+                            style="width: ${job.status === "uploading" ? 35 : job.progress}%"
                         ></div>
 
                     </div>
@@ -5214,14 +5215,26 @@ async function loadPaperVersionStatus() {
     }
     populatePaperBuilds(data.builds || [], data.current_build);
     if (button) {
-      button.disabled = data.running;
-      button.title = data.running
-        ? "Stop the server before changing Paper"
-        : "";
+      setPaperUpdateAvailability(
+        button,
+        data.running
+          ? "Stop the server before downloading and replacing the Paper JAR."
+          : !(data.builds || []).length
+            ? "No Paper builds are available for the selected version."
+            : "",
+      );
     }
   } catch (error) {
     detail.textContent = error.message;
   }
+}
+
+function setPaperUpdateAvailability(button, reason = "") {
+  if (!button) return;
+  button.dataset.unavailableReason = reason;
+  button.setAttribute("aria-disabled", reason ? "true" : "false");
+  button.classList.toggle("is-unavailable", Boolean(reason));
+  button.title = reason;
 }
 
 function sortMinecraftVersions(versions) {
@@ -5304,7 +5317,7 @@ async function loadPaperBuilds(version) {
   const button = document.getElementById("paper-update-button");
   if (!page || !select) return;
   select.innerHTML = "<option>Loading builds...</option>";
-  if (button) button.disabled = true;
+  setPaperUpdateAvailability(button, "Paper builds are still loading.");
   try {
     const response = await fetch(
       `/api/web/servers/${page.dataset.serverId}/paper?version=${
@@ -5314,15 +5327,33 @@ async function loadPaperBuilds(version) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unable to load builds");
     populatePaperBuilds(data.builds || [], data.current_build);
-    if (button) button.disabled = data.running || !data.builds?.length;
+    setPaperUpdateAvailability(
+      button,
+      data.running
+        ? "Stop the server before downloading and replacing the Paper JAR."
+        : !data.builds?.length
+          ? "No Paper builds are available for the selected version."
+          : "",
+    );
   } catch (error) {
     select.innerHTML = `<option>${escapeHtml(error.message)}</option>`;
+    setPaperUpdateAvailability(button, "Paper builds could not be loaded.");
   }
 }
 
 async function installPaperVersion() {
   const page = document.querySelector(".paper-management[data-server-id]");
   const message = document.getElementById("paper-update-message");
+  const button = document.getElementById("paper-update-button");
+  const unavailableReason = button?.dataset.unavailableReason;
+  if (unavailableReason) {
+    message.textContent = unavailableReason;
+    message.classList.add("error");
+    return;
+  }
+  if (button?.disabled) return;
+  if (button) button.disabled = true;
+  message.classList.remove("error");
   message.textContent = "Downloading and verifying Paper...";
   try {
     const response = await fetch(
@@ -5343,6 +5374,11 @@ async function installPaperVersion() {
     setTimeout(() => window.location.reload(), 800);
   } catch (error) {
     message.textContent = error.message;
+    message.classList.add("error");
+    if (button) button.disabled = false;
+    if (String(error.message).includes("Stop the server")) {
+      setPaperUpdateAvailability(button, error.message);
+    }
   }
 }
 
@@ -5469,6 +5505,9 @@ async function loadServerMetrics() {
   }
 }
 
+let serverScheduleState = [];
+let scheduleRunsPage = 1;
+
 async function loadServerSchedules() {
   if (document.hidden) return;
   const page = automationPage();
@@ -5477,11 +5516,12 @@ async function loadServerSchedules() {
   if (!page || (!commandList && !backupList)) return;
   try {
     const response = await fetch(
-      `/api/web/servers/${page.dataset.serverId}/schedules`,
+      `/api/web/servers/${page.dataset.serverId}/schedules?runs_page=${scheduleRunsPage}&runs_per_page=10`,
     );
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unable to load schedules");
     const tasks = (data.tasks || []).filter((task) => task.enabled);
+    serverScheduleState = tasks;
     const taskNames = new Map((data.tasks || []).map((task) => [Number(task.id), task.name]));
     const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
     const timezone = page.dataset.timezone || "server time";
@@ -5506,6 +5546,7 @@ async function loadServerSchedules() {
       if (task.frequency === "custom") return `Custom (${escapeHtml(task.cron_expression || "")}) · ${timezone}`;
       return `Every ${task.interval_minutes} minutes`;
     };
+    const canManage = page.dataset.canManage === "true";
     const renderTasks = (type) => {
       const matches = tasks.filter((task) => task.task_type === type);
       return matches.length ? matches.map((task) => `
@@ -5521,48 +5562,86 @@ async function loadServerSchedules() {
           }`
           : escapeHtml(task.command)
       } · ${describeWhen(task)}</small></div>
-            <button class="button" onclick="deleteServerSchedule(${
-        Number(task.id)
-      })">Delete</button></div>`).join("")
+            ${canManage ? `<div class="schedule-row-actions">
+              ${type === "backup" ? `<button class="button" onclick="runServerScheduleNow(${Number(task.id)}, this)">Run now</button>` : ""}
+              <button class="button" onclick="editServerSchedule(${Number(task.id)})">Edit</button>
+              <button class="button" onclick="deleteServerSchedule(${Number(task.id)})">Delete</button>
+            </div>` : ""}</div>`).join("")
         : `<div class="empty-message">No ${type} jobs yet.</div>`;
     };
     if (commandList) commandList.innerHTML = renderTasks("command");
     if (backupList) backupList.innerHTML = renderTasks("backup");
+    const progress = document.getElementById("scheduled-backup-progress");
+    const activeJobs = data.backup_jobs || [];
+    if (progress) progress.innerHTML = activeJobs.map((job) => {
+      const uploading = job.status === "uploading";
+      return `<div class="scheduled-backup-job"><div class="backup-job-header"><div><strong>${uploading ? "Copying backup off-site" : "Backup in progress"}</strong><small>${escapeHtml(job.message || job.status)}</small></div><strong>${uploading ? "Active" : `${Number(job.progress || 0)}%`}</strong></div><div class="upload-progress-track"><div class="upload-progress-bar${uploading ? " indeterminate" : ""}" style="width: ${uploading ? 35 : Number(job.progress || 0)}%"></div></div></div>`;
+    }).join("");
     const runs = document.getElementById("schedule-runs");
-    const recentRuns = (data.runs || []).filter((run) => !(
-      run.task_type === "command" &&
-      run.status === "failed" &&
-      String(run.detail || "").toLowerCase().includes("server is not running")
-    )).slice(0, 10);
+    const recentRuns = [...(data.runs || [])].sort(
+      (left, right) => new Date(right.started_at) - new Date(left.started_at),
+    );
     const activityTitle = (run) => {
-      const name = taskNames.get(Number(run.task_id));
+      const name = taskNames.get(Number(run.task_id)) || run.task_type;
       if (run.task_type === "command" && run.status === "complete") {
-        return `Command ${name || "command"} sent`;
+        return `Sent command “${name}”`;
       }
-      return `${run.task_type} ${run.status}`;
+      const actions = {
+        complete: "Completed",
+        failed: "Could not complete",
+        running: "Started",
+      };
+      const action = actions[run.status] || `${run.status.charAt(0).toUpperCase()}${run.status.slice(1)}`;
+      return `${action} ${run.task_type} “${name}”`;
     };
-    runs.innerHTML = recentRuns.length ? recentRuns.map((run) => `
-            <div class="schedule-run"><span><strong>${
-      escapeHtml(activityTitle(run))
-    }</strong></span>
-            <small>${escapeHtml(run.detail || "")} · ${
-      new Date(run.started_at).toLocaleString()
-    }</small></div>`).join("") : '<div class="empty-message">No recent activity yet.</div>';
+    runs.innerHTML = recentRuns.length ? recentRuns.map((run) => {
+      const startedAt = new Date(run.started_at);
+      return `<div class="schedule-run">
+        <time datetime="${escapeHtml(run.started_at)}">
+          <strong>${escapeHtml(startedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}</strong>
+          <span>${escapeHtml(startedAt.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }))}</span>
+        </time>
+        <div class="schedule-run-detail">
+          <strong>${escapeHtml(activityTitle(run))}</strong>
+          ${run.detail ? `<small>${escapeHtml(run.detail)}</small>` : ""}
+        </div>
+      </div>`;
+    }).join("") : '<div class="empty-message">No recent activity yet.</div>';
+    const pagination = data.runs_pagination || { page: 1, pages: 1, total: recentRuns.length };
+    scheduleRunsPage = Number(pagination.page || 1);
+    const paginationElement = document.getElementById("schedule-runs-pagination");
+    if (paginationElement) {
+      paginationElement.hidden = Number(pagination.pages || 1) <= 1;
+      paginationElement.querySelector("button:first-child").disabled = scheduleRunsPage <= 1;
+      paginationElement.querySelector("button:last-child").disabled = scheduleRunsPage >= Number(pagination.pages || 1);
+      document.getElementById("schedule-runs-page-label").textContent = `Page ${scheduleRunsPage} of ${Number(pagination.pages || 1)} · ${Number(pagination.total || 0)} entries`;
+    }
   } catch (error) {
     if (commandList) commandList.textContent = error.message;
     if (backupList) backupList.textContent = error.message;
   }
 }
 
+function changeScheduleRunsPage(direction) {
+  scheduleRunsPage = Math.max(1, scheduleRunsPage + Number(direction));
+  loadServerSchedules();
+}
+
+function friendlyScheduleSummary(frequency, runHour = 0, runWeekday = 6, cronExpression = "") {
+  const timezone = automationPage()?.dataset.timezone || "server time";
+  const time = `${String(runHour ?? 0).padStart(2, "0")}:00`;
+  const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  if (frequency === "hourly") return `At the start of every hour · ${timezone}`;
+  if (frequency === "daily") return `Every day at ${time} · ${timezone}`;
+  if (frequency === "weekly") return `Every ${weekdays[runWeekday] || "Sunday"} at ${time} · ${timezone}`;
+  if (frequency === "monthly") return `On the first day of every month at ${time} · ${timezone}`;
+  if (frequency === "custom") return `Custom ${cronExpression || "schedule"} · ${timezone}`;
+  return `Scheduled time · ${timezone}`;
+}
+
 function updateScheduleWhen(select) {
   const fields = select.closest(".schedule-when-fields");
   if (!fields) return;
-  const summaries = {
-    hourly: "At the start of every hour",
-    daily: "Every day at 00:00",
-    weekly: "Every Sunday at 00:00",
-    monthly: "On the first day of every month at 00:00",
-  };
   fields.querySelector("[name=run_hour]").value = "0";
   fields.querySelector("[name=run_weekday]").value = "6";
   const summary = fields.querySelector(".selected-schedule-summary");
@@ -5570,7 +5649,7 @@ function updateScheduleWhen(select) {
     openCustomSchedule(select);
   } else {
     fields.querySelector("[name=cron_expression]").value = "";
-    summary.textContent = `${summaries[select.value]} · ${automationPage()?.dataset.timezone || "server time"}`;
+    summary.textContent = friendlyScheduleSummary(select.value, 0, 6);
   }
 }
 
@@ -5613,7 +5692,8 @@ function closeCustomSchedule(keepCustom) {
   if (!keepCustom && customScheduleSelect) {
     const hidden = customScheduleSelect.closest(".schedule-when-fields").querySelector("[name=cron_expression]");
     if (!hidden.value) {
-      customScheduleSelect.value = "hourly";
+      const form = customScheduleSelect.closest("form");
+      customScheduleSelect.value = form?.elements.task_type.value === "backup" ? "daily" : "hourly";
       updateScheduleWhen(customScheduleSelect);
     }
   }
@@ -5637,19 +5717,98 @@ async function createServerSchedule(event) {
   const page = automationPage();
   const form = event.currentTarget;
   const payload = Object.fromEntries(new FormData(form));
+  const scheduleId = payload.schedule_id;
+  delete payload.schedule_id;
   const response = await fetch(
-    `/api/web/servers/${page.dataset.serverId}/schedules`,
+    `/api/web/servers/${page.dataset.serverId}/schedules${scheduleId ? `/${scheduleId}` : ""}`,
     {
-      method: "POST",
+      method: scheduleId ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     },
   );
   const data = await response.json();
   if (!response.ok) return alert(data.error || "Unable to add schedule");
+  closeServerScheduleModal();
+  await loadServerSchedules();
+}
+
+function openServerScheduleModal(taskType) {
+  const modal = document.getElementById(`${taskType}-schedule-modal`);
+  const form = modal?.querySelector(".friendly-schedule-form");
+  if (!modal || !form) return;
+  resetServerScheduleForm(form);
+  modal.querySelector("h2").textContent = `Add ${taskType}`;
+  modal.hidden = false;
+  form.elements.name.focus();
+}
+
+function closeServerScheduleModal(event) {
+  if (event && event.target !== event.currentTarget) return;
+  document.querySelectorAll("#command-schedule-modal, #backup-schedule-modal").forEach((modal) => {
+    modal.hidden = true;
+    const form = modal.querySelector(".friendly-schedule-form");
+    if (form) resetServerScheduleForm(form);
+  });
+}
+
+function editServerSchedule(taskId) {
+  const task = serverScheduleState.find((item) => Number(item.id) === Number(taskId));
+  if (!task) return;
+  const form = [...document.querySelectorAll(".friendly-schedule-form")].find((item) => item.elements.task_type.value === task.task_type);
+  if (!form) return;
+  form.elements.schedule_id.value = task.id;
+  form.elements.name.value = task.name || "";
+  if (form.elements.command) form.elements.command.value = task.command || "";
+  form.elements.frequency.value = task.frequency || "hourly";
+  form.elements.run_hour.value = task.run_hour ?? 0;
+  form.elements.run_weekday.value = task.run_weekday ?? 6;
+  form.elements.cron_expression.value = task.cron_expression || "";
+  if (form.elements.retention_count) form.elements.retention_count.value = task.retention_count || 7;
+  if (form.elements.remote_destination) form.elements.remote_destination.value = task.remote_destination || "";
+  if (form.elements.remote_retention_count) form.elements.remote_retention_count.value = task.remote_retention_count || 30;
+  const summary = form.querySelector(".selected-schedule-summary");
+  if (summary) summary.textContent = friendlyScheduleSummary(
+    task.frequency || "hourly",
+    task.run_hour ?? 0,
+    task.run_weekday ?? 6,
+    task.cron_expression || "",
+  );
+  form.querySelector(".schedule-submit-button").textContent = `Save ${task.task_type}`;
+  const modal = form.closest(".modal-backdrop");
+  modal.querySelector("h2").textContent = `Edit ${task.task_type}`;
+  modal.hidden = false;
+  form.elements.name.focus();
+}
+
+function resetServerScheduleForm(form) {
   form.reset();
+  form.elements.schedule_id.value = "";
+  form.elements.frequency.value = form.elements.task_type.value === "backup" ? "daily" : "hourly";
+  const submit = form.querySelector(".schedule-submit-button");
+  submit.textContent = submit.dataset.createLabel;
   updateScheduleWhen(form.elements.frequency);
-  loadServerSchedules();
+}
+
+function cancelServerScheduleEdit(form) {
+  resetServerScheduleForm(form);
+  closeServerScheduleModal();
+}
+
+async function runServerScheduleNow(taskId, button) {
+  const page = automationPage();
+  button.disabled = true;
+  button.textContent = "Starting…";
+  const response = await fetch(`/api/web/servers/${page.dataset.serverId}/schedules/${taskId}/run`, { method: "POST" });
+  const data = await response.json();
+  if (!response.ok) {
+    button.disabled = false;
+    button.textContent = "Run now";
+    return alert(data.error || "Unable to start backup");
+  }
+  const progress = document.getElementById("scheduled-backup-progress");
+  if (progress) progress.innerHTML = '<div class="scheduled-backup-job"><strong>Starting backup…</strong></div>';
+  window.setTimeout(loadServerSchedules, 300);
 }
 
 async function deleteServerSchedule(taskId) {
@@ -5666,7 +5825,7 @@ async function deleteServerSchedule(taskId) {
 loadServerMetrics();
 loadServerSchedules();
 
-setInterval(loadServerSchedules, 10000);
+setInterval(loadServerSchedules, 2500);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) loadServerSchedules();
 });
