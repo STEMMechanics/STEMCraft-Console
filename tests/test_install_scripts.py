@@ -48,6 +48,13 @@ def test_minecraft_service_allows_supervisor_to_stop_java_gracefully():
     assert "TimeoutStopSec=90" in unit
 
 
+def test_stopped_server_status_dot_has_a_stable_default_colour():
+    stylesheet = (ROOT / "app/static/style.css").read_text()
+    rule = stylesheet.split(".server-status-dot {", 1)[1].split("}", 1)[0]
+
+    assert "background: var(--danger);" in rule
+
+
 def test_helper_self_elevates_with_resolved_absolute_path(tmp_path):
     sudo = tmp_path / "sudo"
     sudo.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n")

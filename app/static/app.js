@@ -23,6 +23,8 @@ function showToast(message, type = "info", timeout = 4500) {
     ? "fa-solid fa-circle-check"
     : type === "error"
       ? "fa-solid fa-circle-exclamation"
+      : type === "warning"
+        ? "fa-solid fa-triangle-exclamation"
       : "fa-solid fa-circle-info";
   const content = document.createElement("span");
   content.textContent = text;
@@ -3094,6 +3096,7 @@ async function updatePropertiesPage() {
       "property-server-port",
       p.server_port,
     );
+    checkServerPortWarning(p.server_port, page.dataset.serverId);
 
     setValue(
       "property-max-players",
@@ -3302,6 +3305,31 @@ function setChecked(
   }
 }
 
+let portWarningTimer = null;
+
+function checkServerPortWarning(port, excludeServerId = null) {
+  clearTimeout(portWarningTimer);
+  portWarningTimer = setTimeout(async () => {
+    const notice = document.getElementById("server-port-warning");
+    if (!notice) return;
+    const numericPort = Number(port);
+    if (!Number.isInteger(numericPort) || numericPort < 1 || numericPort > 65535) {
+      notice.hidden = true;
+      return;
+    }
+    const params = new URLSearchParams({ port: String(numericPort) });
+    if (excludeServerId) params.set("exclude_server_id", String(excludeServerId));
+    try {
+      const response = await fetch(`/api/web/servers/port-warning?${params}`);
+      const data = await response.json();
+      notice.textContent = data.warning || "";
+      notice.hidden = !data.warning;
+    } catch {
+      notice.hidden = true;
+    }
+  }, 250);
+}
+
 async function saveServerProperties(
   event,
   restartIfRunning = false,
@@ -3456,6 +3484,7 @@ async function saveServerProperties(
   if (status) {
     status.textContent = "Saved";
   }
+  if (data.warning) showToast(data.warning, "warning");
   clearFormErrors(document.getElementById("properties-form"));
 
   const restartAlert = document.getElementById(

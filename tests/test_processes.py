@@ -112,6 +112,24 @@ def test_systemctl_uses_argument_list_without_shell(monkeypatch):
     assert "shell" not in captured["kwargs"]
 
 
+def test_start_rejects_port_used_by_another_running_server(monkeypatch):
+    first = processes.ServerProcessConfig(
+        "subprocess", "first", "/srv/first", "2G", "paper.jar", "",
+        port=25565, display_name="Survival",
+    )
+    second = processes.ServerProcessConfig(
+        "subprocess", "second", "/srv/second", "2G", "paper.jar", "",
+        port=25565, display_name="Creative",
+    )
+    monkeypatch.setattr(processes, "server_configs", {1: first, 2: second})
+    monkeypatch.setattr(
+        processes, "server_status", lambda server_id: {"running": server_id == 1},
+    )
+
+    with pytest.raises(RuntimeError, match="Port 25565.*Survival"):
+        processes.start_server(2, "/srv/second")
+
+
 def test_systemctl_stop_does_not_disable_instance(monkeypatch):
     captured = {}
     monkeypatch.setattr(processes.subprocess, "run", lambda command, **kwargs: captured.update(command=command))

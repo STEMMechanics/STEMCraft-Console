@@ -39,6 +39,8 @@ class ServerProcessConfig:
     java_args: str
     min_memory: str = "2G"
     java_path: str = "java"
+    port: int = 25565
+    display_name: str = "Server"
 
 
 server_configs: dict[int, ServerProcessConfig] = {}
@@ -69,6 +71,8 @@ def register_server(server) -> None:
         backend, service_name, server.directory, server.memory,
         server.jar_name, server.java_args, server.min_memory,
         getattr(server, "java_path", "java") or "java",
+        getattr(server, "port", 25565),
+        getattr(server, "name", "Server"),
     )
 
 
@@ -292,6 +296,15 @@ def start_server(
     min_memory: str | None = None,
     java_path: str = "java",
 ):
+    current_config = server_configs.get(server_id)
+    if current_config:
+        for other_id, other_config in server_configs.items():
+            if other_id == server_id or other_config.port != current_config.port:
+                continue
+            if server_status(other_id).get("running"):
+                raise RuntimeError(
+                    f"Port {current_config.port} is currently in use by {other_config.display_name}"
+                )
     config = _systemd_config(server_id)
     if config:
         if _systemd_status(config)["running"]:
