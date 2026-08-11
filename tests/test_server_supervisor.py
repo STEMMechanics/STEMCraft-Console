@@ -1,6 +1,6 @@
 import threading
 
-from app.server_supervisor import _serve_commands, _update_online_players
+from app.server_supervisor import _echo_command, _serve_commands, _update_online_players
 
 
 def test_supervisor_tracks_joining_and_leaving_players():
@@ -11,6 +11,12 @@ def test_supervisor_tracks_joining_and_leaving_players():
     _update_online_players("[Server thread/INFO]: Alex left the game", players)
 
     assert players == {"Steve"}
+
+
+def test_supervisor_echoes_panel_commands_to_journal(capsys):
+    _echo_command("say Server restarting")
+
+    assert capsys.readouterr().out == "[Panel command] > say Server restarting\n"
 
 
 def test_supervisor_tracks_modern_paper_login_and_disconnect_messages():

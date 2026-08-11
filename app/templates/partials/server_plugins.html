@@ -11,15 +11,15 @@
         hidden
     >
         <div>
-            <i class="fa-solid fa-rotate"></i>
+            <i id="plugin-change-alert-icon" class="fa-solid fa-rotate"></i>
 
-            <span>
+            <span id="plugin-change-alert-message">
                 Plugin changes are pending.
                 Restart the server to apply them.
             </span>
         </div>
 
-        <span class="restart-required">
+        <span id="plugin-change-alert-label" class="restart-required">
             Restart required
         </span>
     </div>
@@ -39,14 +39,10 @@
     <section class="overview-card plugin-install-card">
       <div class="card-header"><span>Install Plugin</span></div>
       <div class="plugin-install-options">
-        <form class="plugin-install-form" onsubmit="uploadPluginJar(event)">
+        <form class="plugin-install-form" onsubmit="return false">
           <div class="plugin-install-heading"><strong>Upload a JAR</strong><small>Select a Paper or Bukkit plugin from this device.</small></div>
-          <label class="plugin-file-picker">
-            <input name="plugin" type="file" accept=".jar,application/java-archive" onchange="updatePluginFileName(this)" required>
-            <span class="button"><i class="fa-solid fa-folder-open"></i> Choose JAR</span>
-            <span class="plugin-file-name">No file selected</span>
-          </label>
-          <button class="button success" type="submit">Upload and install</button>
+          <input name="plugin" type="file" accept=".jar,application/java-archive" onchange="uploadPluginJar(this)" hidden>
+          <button class="button success plugin-upload-button" type="button" onclick="selectPluginJar(this)"><i class="fa-solid fa-upload"></i> Upload and install</button>
         </form>
         <form class="plugin-install-form" onsubmit="downloadPluginUrl(event)">
           <div class="plugin-install-heading"><strong>Download from URL</strong><small>Use a direct, public HTTPS link ending in .jar.</small></div>
@@ -87,6 +83,27 @@
     </section>
 
 </div>
+
+
+{% if user.can("plugins.manage") %}
+<div id="plugin-duplicates-modal" class="modal-backdrop" hidden>
+    <div class="modal-card plugin-duplicates-modal-card">
+        <div class="plugin-duplicates-heading">
+            <span class="plugin-duplicates-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+            <div>
+                <h2>Multiple plugin versions found</h2>
+                <p>More than one version of the same plugin is enabled. Leaving them all enabled may prevent one version from loading or cause the plugin to behave unexpectedly.</p>
+            </div>
+        </div>
+        <p class="plugin-duplicates-instruction">Turn off any versions you do not want Paper to load.</p>
+        <div id="plugin-duplicate-groups" class="plugin-duplicate-groups"></div>
+        <div class="modal-actions">
+            <button class="button" type="button" onclick="keepDuplicatePluginsEnabled()">Leave all enabled</button>
+            <button id="disable-selected-duplicates" class="button danger" type="button" onclick="disableSelectedDuplicatePlugins()">Apply changes</button>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 
 <div

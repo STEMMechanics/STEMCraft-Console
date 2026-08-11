@@ -59,6 +59,14 @@
 
             <div class="property-grid">
 
+                {% if user.role_name == "Administrator" %}
+                <div class="property-field full-width instance-directory-field">
+                    <span>Instance directory</span>
+                    <code>{{ server.directory }}</code>
+                    <small>Full filesystem path for this server instance.</small>
+                </div>
+                {% endif %}
+
                 <label class="property-field">
                     <span>Management mode</span>
                     <select id="property-process-backend" name="process_backend" onchange="updateProcessManagementFields()">

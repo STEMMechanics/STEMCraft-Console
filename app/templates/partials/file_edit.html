@@ -1,4 +1,4 @@
-<div class="file-editor-page">
+<div class="file-editor-page" data-server-id="{{ server.id }}" data-page-title="Edit File">
 
     <div class="file-editor-toolbar">
 
@@ -9,7 +9,7 @@
             </strong>
 
             <small>
-                {{ file_path }}
+                {{ server.name }} · {{ file_path }}
             </small>
 
         </div>

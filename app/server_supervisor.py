@@ -21,6 +21,10 @@ LEAVE_PATTERN = re.compile(r": ([A-Za-z0-9_]{1,16}) left the game")
 DISCONNECT_PATTERN = re.compile(r"\]:\s+([A-Za-z0-9_]{1,16})(?:\s+\([^)]*\))? lost connection:")
 
 
+def _echo_command(command: str) -> None:
+    print(f"[Panel command] > {command}", flush=True)
+
+
 def _update_online_players(line: str, online_players: set[str]) -> None:
     joined = JOIN_PATTERN.search(line) or LOGIN_PATTERN.search(line)
     if joined:
@@ -65,6 +69,7 @@ def _serve_commands(server, process, stopping: threading.Event, online_players: 
                         connection.sendall(json.dumps(sorted(online_players)).encode("utf-8"))
                     continue
                 if data and "\n" not in data and process.stdin:
+                    _echo_command(data)
                     process.stdin.write((data + "\n").encode())
                     process.stdin.flush()
                     connection.sendall(b"ok\n")

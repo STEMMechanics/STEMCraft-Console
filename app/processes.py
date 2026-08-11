@@ -569,11 +569,11 @@ def send_command(
     server_id: int,
     command: str,
 ):
+    command = command.strip()
+    if not command or "\n" in command or "\r" in command:
+        raise RuntimeError("Invalid server command")
     config = _systemd_config(server_id)
     if config:
-        command = command.strip()
-        if not command or "\n" in command or "\r" in command:
-            raise RuntimeError("Invalid server command")
         endpoint = SYSTEMD_SOCKET_DIR / f"{config.service_name}.sock"
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
@@ -602,10 +602,10 @@ def send_command(
             "Server console unavailable"
         )
 
-    command = command.strip()
-
-    if not command:
-        return
+    console_buffers.setdefault(
+        server_id,
+        deque(maxlen=MAX_CONSOLE_LINES),
+    ).append(f"[Panel command] > {command}")
 
     process.stdin.write(
         command + "\n"
