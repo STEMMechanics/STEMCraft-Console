@@ -25,6 +25,7 @@ from .permissions import (
     get_server_for_user,
     has_permission,
 )
+from .processes import register_server, server_status, systemd_available
 
 from .schemas import (
     ServerAccessRequest,
@@ -102,6 +103,12 @@ def create_server(
     ),
 ):
 
+    if payload.process_backend == "systemd" and not systemd_available():
+        raise HTTPException(
+            status_code=400,
+            detail="Systemd services are only available on Linux hosts running systemd",
+        )
+
     server = Server(
         **payload.model_dump()
     )
@@ -157,6 +164,29 @@ def update_server(
         exclude_unset=True
     )
 
+    requested_backend = changes.get("process_backend", server.process_backend)
+    if (
+        requested_backend == "systemd"
+        and server.process_backend != "systemd"
+        and not systemd_available()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Systemd services are only available on Linux hosts running systemd",
+        )
+    if requested_backend != server.process_backend:
+        status = server_status(server.id)
+        if status.get("running"):
+            raise HTTPException(
+                status_code=409,
+                detail="Stop the server before changing its process backend",
+            )
+        if server.process_backend == "systemd" and status.get("enabled_at_boot"):
+            raise HTTPException(
+                status_code=409,
+                detail="Disable automatic startup before changing its process backend",
+            )
+
     for field, value in changes.items():
 
         setattr(
@@ -167,6 +197,7 @@ def update_server(
 
     db.commit()
     db.refresh(server)
+    register_server(server)
 
     return server
 

@@ -362,9 +362,10 @@ the panel service permission to manage only `stemcraft-server@*.service` units;
 server names, JAR filenames, memory values, and JVM arguments are validated and
 passed without a shell.
 
-For a systemd-backed server, **Start** enables the instance and starts it
-immediately, so it also starts automatically after a host reboot. **Stop** stops
-and disables the instance. **Restart** leaves its enabled state unchanged.
+For a systemd-backed server, **Start**, **Stop**, and **Restart** control the
+current runtime without changing whether the instance starts after a host
+reboot. Use **Start automatically at boot** in server Properties to enable or
+disable that systemd boot policy independently.
 
 The installed units are:
 

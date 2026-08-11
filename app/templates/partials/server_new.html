@@ -130,10 +130,14 @@
                 <label class="property-field">
                     <span>Process Backend</span>
                     <select name="process_backend">
-                        <option value="systemd" selected>Production (independent systemd service)</option>
-                        <option value="subprocess">Development (panel-owned)</option>
+                        <option value="systemd" {% if systemd_available %}selected{% else %}disabled{% endif %}>Production (independent systemd service)</option>
+                        <option value="subprocess" {% if not systemd_available %}selected{% endif %}>Development (panel-owned)</option>
                     </select>
+                    {% if systemd_available %}
                     <small>Use systemd on production Linux so Minecraft survives panel restarts.</small>
+                    {% else %}
+                    <small>Systemd is unavailable on this host. Use a panel-owned process.</small>
+                    {% endif %}
                 </label>
 
                 <label class="property-field">

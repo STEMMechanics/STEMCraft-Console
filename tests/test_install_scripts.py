@@ -40,6 +40,14 @@ def test_installer_preserves_existing_java_and_installs_only_selected_versions()
     assert '"java-$version-amazon-corretto-devel"' in script
 
 
+def test_minecraft_service_allows_supervisor_to_stop_java_gracefully():
+    unit = (ROOT / "deploy/stemcraft-server@.service").read_text()
+
+    assert "KillSignal=SIGTERM" in unit
+    assert "KillMode=mixed" in unit
+    assert "TimeoutStopSec=90" in unit
+
+
 def test_helper_self_elevates_with_resolved_absolute_path(tmp_path):
     sudo = tmp_path / "sudo"
     sudo.write_text("#!/usr/bin/env bash\nprintf '%s\\n' \"$@\"\n")

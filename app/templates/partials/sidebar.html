@@ -150,6 +150,19 @@
         </a>
         {% endif %}
 
+        {% if user.can("console.view") %}
+        <a
+            href="/servers/{{ active_server.id }}/logs"
+            class="nav-link"
+            hx-get="/servers/{{ active_server.id }}/logs"
+            hx-target="#page-content"
+            hx-push-url="true"
+        >
+            <i class="fa-regular fa-file-lines"></i>
+            Logs
+        </a>
+        {% endif %}
+
         {% if user.can("players.view") %}
         <a
             href="/servers/{{ active_server.id }}/players"

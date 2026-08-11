@@ -61,6 +61,10 @@ from .web_backups import (
     router as web_backups_router,
 )
 
+from .web_logs import (
+    router as web_logs_router,
+)
+
 from .web_properties import (
     router as web_properties_router,
 )
@@ -190,6 +194,10 @@ app.include_router(
 
 app.include_router(
     web_backups_router
+)
+
+app.include_router(
+    web_logs_router
 )
 
 app.include_router(

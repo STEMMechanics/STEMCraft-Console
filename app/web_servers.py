@@ -50,6 +50,7 @@ from .processes import (
     register_server,
     MEMORY_PATTERN,
     SERVICE_PATTERN,
+    systemd_available,
 )
 from .server_import import detect_server_directories, inspect_server_directory
 from .server_deletion import delete_managed_server
@@ -688,6 +689,10 @@ def create_server_web(
 
         if process_backend not in {"subprocess", "systemd"}:
             raise ValueError("Invalid process backend")
+        if process_backend == "systemd" and not systemd_available():
+            raise ValueError(
+                "Systemd services are only available on Linux hosts running systemd"
+            )
 
         java_path = select_java_major(java_major)
 
@@ -1441,6 +1446,11 @@ def import_server(
 
     if process_backend not in {"subprocess", "systemd"}:
         raise HTTPException(status_code=400, detail="Invalid process backend")
+    if process_backend == "systemd" and not systemd_available():
+        raise HTTPException(
+            status_code=400,
+            detail="Systemd services are only available on Linux hosts running systemd",
+        )
     if not MEMORY_PATTERN.fullmatch(memory):
         raise HTTPException(status_code=400, detail="Invalid memory allocation")
 

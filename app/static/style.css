@@ -1316,6 +1316,10 @@ button.restart:hover {
   display: none;
 }
 
+.process-management-notice {
+  margin: 20px 20px 0;
+}
+
 .plugin-restart-alert > div {
   display: flex;
   align-items: center;
@@ -1819,6 +1823,74 @@ button.restart:hover {
   padding: 20px;
 }
 
+.server-logs-page {
+  display: grid;
+  gap: 20px;
+}
+
+.server-log-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.server-log-row:hover,
+.server-log-row.active {
+  background: var(--surface-hover);
+}
+
+.server-log-name {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.server-log-content {
+  min-height: 360px;
+  max-height: 70vh;
+  margin: 0;
+  padding: 18px;
+  overflow: auto;
+  background: #111827;
+  color: #d1d5db;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.server-log-notice {
+  margin: 16px;
+}
+
+.server-log-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.server-log-pagination[hidden] {
+  display: none;
+}
+
+.server-log-pagination [aria-disabled="true"] {
+  pointer-events: none;
+  opacity: .45;
+}
+
 .property-field {
   display: flex;
   flex-direction: column;
@@ -2246,6 +2318,11 @@ input[type="checkbox"] {
   padding: 0;
 
   border-bottom: 0;
+}
+
+#property-systemd-service[hidden],
+#property-systemd-enabled-row[hidden] {
+  display: none;
 }
 
 .properties-actions {

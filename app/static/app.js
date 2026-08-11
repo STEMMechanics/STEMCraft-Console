@@ -107,6 +107,7 @@ window.fetch = async (...args) => {
     const method = String(options.method || request?.method || "GET").toUpperCase();
     if (!new Set(["GET", "HEAD", "OPTIONS"]).has(method)) {
       response.clone().json().then((data) => {
+        if (data?.suppress_toast) return;
         const message = data?.message || data?.error;
         if (!response.ok) {
           showToast(message || "The action could not be completed.", "error");
@@ -3021,6 +3022,37 @@ async function updatePropertiesPage() {
 
     const p = data.properties;
     const startup = data.startup || {};
+    const management = data.management || {};
+
+    setValue("property-process-backend", management.process_backend || "subprocess");
+    const backendSelect = document.getElementById("property-process-backend");
+    if (backendSelect) {
+      backendSelect.dataset.systemdAvailable = String(management.systemd_available !== false);
+    }
+    const systemdOption = backendSelect?.querySelector('option[value="systemd"]');
+    if (systemdOption) {
+      systemdOption.disabled = management.systemd_available === false;
+    }
+    const systemdNotice = document.getElementById("property-systemd-unavailable");
+    if (systemdNotice) {
+      systemdNotice.hidden = management.systemd_available !== false;
+    }
+    const serviceName = document.getElementById("property-service-name");
+    if (serviceName) {
+      serviceName.textContent = management.unit_name || management.service_name || "—";
+    }
+    setChecked("property-systemd-enabled", management.enabled_at_boot);
+    const serviceState = document.getElementById("property-service-state");
+    if (serviceState) {
+      const runtimeState = management.running ? "Running" : "Stopped";
+      const bootState = management.enabled_at_boot === true
+        ? "enabled at boot"
+        : management.enabled_at_boot === false
+          ? "disabled at boot"
+          : "boot status unavailable";
+      serviceState.textContent = `${runtimeState} · ${bootState}`;
+    }
+    updateProcessManagementFields();
 
     setValue("property-min-memory", startup.min_memory || "2G");
     setValue("property-max-memory", startup.max_memory || "2G");
@@ -3272,8 +3304,9 @@ function setChecked(
 
 async function saveServerProperties(
   event,
+  restartIfRunning = false,
 ) {
-  event.preventDefault();
+  event?.preventDefault();
 
   const page = document.querySelector(
     ".properties-page",
@@ -3284,6 +3317,12 @@ async function saveServerProperties(
   }
 
   const payload = {
+    restart_if_running: restartIfRunning,
+
+    process_backend: valueOf("property-process-backend"),
+
+    enabled_at_boot: checkedOf("property-systemd-enabled"),
+
     min_memory: normalizedStartupMemory("property-min-memory"),
 
     max_memory: normalizedStartupMemory("property-max-memory"),
@@ -3397,6 +3436,10 @@ async function saveServerProperties(
   );
 
   if (!response.ok) {
+    if (data.restart_confirmation_required) {
+      openPropertiesRestartModal();
+      return;
+    }
     showFormError(
       document.getElementById("properties-form"),
       data.error || "Save failed.",
@@ -3420,17 +3463,52 @@ async function saveServerProperties(
   );
 
   if (restartAlert) {
-    restartAlert.hidden = false;
     const message = document.getElementById("properties-pending-message");
     const label = document.getElementById("properties-pending-label");
-    if (data.running) {
+    if (data.restarted) {
+      restartAlert.hidden = true;
+      if (status) status.textContent = "Saved · server restarted";
+    } else if (data.running) {
+      restartAlert.hidden = false;
       if (message) message.textContent = "Property changes are pending. Restart the server to apply them.";
       if (label) label.textContent = "Restart required";
     } else {
-      if (message) message.textContent = "Changes saved. They will apply when the server is next started.";
-      if (label) label.textContent = "Applies on next start";
+      restartAlert.hidden = true;
     }
   }
+}
+
+function openPropertiesRestartModal() {
+  const modal = document.getElementById("properties-restart-modal");
+  if (modal) modal.hidden = false;
+}
+
+function closePropertiesRestartModal() {
+  const modal = document.getElementById("properties-restart-modal");
+  if (modal) modal.hidden = true;
+}
+
+async function confirmPropertiesRestart() {
+  const button = document.getElementById("confirm-properties-restart");
+  if (button) button.disabled = true;
+  closePropertiesRestartModal();
+  try {
+    await saveServerProperties(null, true);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function updateProcessManagementFields() {
+  const backend = document.getElementById("property-process-backend");
+  const service = document.getElementById("property-systemd-service");
+  const enabled = document.getElementById("property-systemd-enabled-row");
+  const enabledToggle = document.getElementById("property-systemd-enabled");
+  const isSystemd = backend?.value === "systemd";
+  const systemdAvailable = backend?.dataset.systemdAvailable !== "false";
+  if (service) service.hidden = !isSystemd;
+  if (enabled) enabled.hidden = !isSystemd || !systemdAvailable;
+  if (!isSystemd && enabledToggle) enabledToggle.checked = false;
 }
 
 function updateStartupCommandPreview() {
@@ -3453,6 +3531,110 @@ function updateStartupCommandPreview() {
     "--nogui",
   ].filter(Boolean).join(" ");
 }
+
+async function updateLatestLog() {
+  const viewer = document.querySelector('.server-log-content[data-live="true"]');
+  if (!viewer || viewer.dataset.refreshing === "true") return;
+  viewer.dataset.refreshing = "true";
+  const params = new URLSearchParams();
+  if (viewer.dataset.logSize) params.set("size", viewer.dataset.logSize);
+  if (viewer.dataset.logModifiedNs) params.set("modified_ns", viewer.dataset.logModifiedNs);
+  try {
+    const response = await fetch(
+      `/api/web/servers/${viewer.dataset.serverId}/logs/latest?${params}`,
+    );
+    if (!response.ok) return;
+    const data = await response.json();
+    viewer.dataset.logSize = String(data.size ?? "");
+    viewer.dataset.logModifiedNs = String(data.modified_ns ?? "");
+    if (!data.changed) return;
+    const truncatedNotice = document.getElementById("server-log-truncated-notice");
+    if (truncatedNotice) truncatedNotice.hidden = data.truncated !== true;
+    const nearBottom = viewer.scrollHeight - viewer.scrollTop - viewer.clientHeight < 48;
+    viewer.textContent = data.content || "";
+    if (nearBottom) viewer.scrollTop = viewer.scrollHeight;
+  } catch (error) {
+    console.debug("Unable to refresh latest.log", error);
+  } finally {
+    viewer.dataset.refreshing = "false";
+  }
+}
+
+setInterval(updateLatestLog, 3000);
+
+function serverLogPageUrl(serverId, page, selectedLog = "") {
+  const params = new URLSearchParams({ page: String(page) });
+  if (selectedLog) params.set("file", selectedLog);
+  return `/servers/${serverId}/logs?${params}`;
+}
+
+async function updateServerLogList() {
+  const pageElement = document.querySelector(".server-logs-page");
+  const rows = document.getElementById("server-log-rows");
+  if (!pageElement || !rows || pageElement.dataset.listRefreshing === "true") return;
+  pageElement.dataset.listRefreshing = "true";
+  try {
+    const response = await fetch(
+      `/api/web/servers/${pageElement.dataset.serverId}/logs?page=${pageElement.dataset.logsPage}`,
+    );
+    if (!response.ok) return;
+    const data = await response.json();
+    pageElement.dataset.logsPage = String(data.page);
+    rows.replaceChildren();
+    for (const log of data.logs || []) {
+      const link = document.createElement("a");
+      link.className = `server-log-row${log.name === pageElement.dataset.selectedLog ? " active" : ""}`;
+      link.href = serverLogPageUrl(pageElement.dataset.serverId, data.page, log.name);
+      link.setAttribute("hx-get", link.href);
+      link.setAttribute("hx-target", "#page-content");
+      link.setAttribute("hx-push-url", "true");
+      const name = document.createElement("span");
+      name.className = "server-log-name";
+      const icon = document.createElement("i");
+      icon.className = "fa-regular fa-file-lines";
+      name.append(icon, document.createTextNode(log.name));
+      const modified = document.createElement("span");
+      modified.textContent = log.modified_display;
+      const size = document.createElement("span");
+      size.textContent = log.size_display;
+      link.append(name, modified, size);
+      rows.appendChild(link);
+    }
+    if (!(data.logs || []).length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-message";
+      empty.textContent = "No Minecraft log files were found in this server's logs directory.";
+      rows.appendChild(empty);
+    }
+    if (window.htmx) window.htmx.process(rows);
+
+    const count = document.getElementById("server-log-count");
+    if (count) count.textContent = `${data.total_logs} files`;
+    const pagination = document.getElementById("server-log-pagination");
+    if (pagination) pagination.hidden = data.total_pages <= 1;
+    const label = document.getElementById("server-log-page-label");
+    if (label) label.textContent = `Page ${data.page} of ${data.total_pages}`;
+    const previous = pagination?.querySelector('[data-log-page="previous"]');
+    const next = pagination?.querySelector('[data-log-page="next"]');
+    const selected = pageElement.dataset.selectedLog;
+    if (previous) {
+      previous.href = serverLogPageUrl(pageElement.dataset.serverId, Math.max(1, data.page - 1), selected);
+      previous.setAttribute("hx-get", previous.href);
+      previous.setAttribute("aria-disabled", String(data.page <= 1));
+    }
+    if (next) {
+      next.href = serverLogPageUrl(pageElement.dataset.serverId, Math.min(data.total_pages, data.page + 1), selected);
+      next.setAttribute("hx-get", next.href);
+      next.setAttribute("aria-disabled", String(data.page >= data.total_pages));
+    }
+  } catch (error) {
+    console.debug("Unable to refresh server log list", error);
+  } finally {
+    pageElement.dataset.listRefreshing = "false";
+  }
+}
+
+setInterval(updateServerLogList, 5000);
 
 function normalizedStartupMemory(id) {
   const input = document.getElementById(id);
@@ -4732,14 +4914,7 @@ async function serverAction(
       },
     );
 
-    const data = await response.json();
-
     if (!response.ok) {
-      alert(
-        data.error ||
-          `Unable to ${action} server`,
-      );
-
       return;
     }
 
@@ -4752,10 +4927,6 @@ async function serverAction(
     console.error(
       "Server action failed:",
       error,
-    );
-
-    alert(
-      `Unable to ${action} server`,
     );
   }
 }

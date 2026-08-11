@@ -20,6 +20,9 @@ RuntimeDirectoryMode=0770
 RuntimeDirectoryPreserve=yes
 TimeoutStopSec=90
 KillSignal=SIGTERM
+# Signal the supervisor first. It translates SIGTERM into Minecraft's `stop`
+# console command; Java is only force-killed if the graceful timeout expires.
+KillMode=mixed
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full

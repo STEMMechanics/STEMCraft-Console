@@ -4,6 +4,7 @@ from .models import Server, User
 
 from .version import APP_VERSION
 from .permissions import has_permission
+from .processes import systemd_available
 
 def get_available_servers(
     db: Session,
@@ -46,4 +47,5 @@ def build_web_context(
         "available_servers": available_servers,
         "active_server": active_server,
         "app_version": APP_VERSION,
+        "systemd_available": systemd_available(),
     }
