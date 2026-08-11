@@ -596,6 +596,7 @@ let pluginServerRunning = false;
 let pluginDuplicateGroups = [];
 let duplicatePluginFilenames = new Set();
 let duplicatePluginDetails = new Map();
+let latestInstalledPluginFilename = null;
 let sessionAcknowledgedPluginDuplicates = new Set();
 const acknowledgedPluginDuplicatesKey = "stemcraft.acknowledgedPluginDuplicates";
 
@@ -987,6 +988,7 @@ async function installUploadedPlugin(file, replace = false) {
     }
     if (!response.ok) throw new Error(data.error || "Plugin upload failed");
     status.textContent = `${data.plugin.name} ${replace ? "replaced" : "installed"}. Restart required.`;
+    latestInstalledPluginFilename = data.plugin.filename;
     pluginRestartRequired = true;
     showPluginRestartAlert();
     await updatePluginsPage(true);
@@ -1025,6 +1027,7 @@ async function installPluginUrl(url, replace = false) {
     }
     if (!response.ok) throw new Error(data.error || "Plugin download failed");
     status.textContent = `${data.plugin.name} ${replace ? "replaced" : "installed"}. Restart required.`;
+    latestInstalledPluginFilename = data.plugin.filename;
     form.reset();
     pluginRestartRequired = true;
     showPluginRestartAlert();
@@ -1152,6 +1155,10 @@ function renderPlugins() {
 
                             <span>
                                 ${formatFileSize(plugin.size)}
+                            </span>
+
+                            <span>
+                                Modified ${formatPluginModified(plugin.modified_ns)}
                             </span>
 
                             <span class="${
@@ -1334,10 +1341,22 @@ function showPluginDuplicatesModal() {
       const filename = document.createElement("strong");
       filename.textContent = plugin.filename;
       description.appendChild(filename);
+      if (plugin.filename === latestInstalledPluginFilename) {
+        const recent = document.createElement("span");
+        recent.className = "plugin-just-added-label";
+        recent.textContent = "Just added";
+        filename.append(" ", recent);
+        label.classList.add("just-added");
+      }
       if (plugin.version) {
         const version = document.createElement("small");
         version.textContent = `Version ${plugin.version}`;
         description.appendChild(version);
+      }
+      if (plugin.modified_ns) {
+        const modified = document.createElement("small");
+        modified.textContent = `Modified ${formatPluginModified(plugin.modified_ns)}`;
+        description.appendChild(modified);
       }
       const state = document.createElement("small");
       state.className = "plugin-duplicate-state";
@@ -2402,6 +2421,19 @@ function formatFileSize(bytes) {
       1024
     ).toFixed(1)
   } MB`;
+}
+
+function formatPluginModified(modifiedNs) {
+  if (!modifiedNs) return "Unknown";
+  const date = new Date(Number(modifiedNs) / 1_000_000);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return new Intl.DateTimeFormat(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 async function togglePlugin(
@@ -3484,6 +3516,11 @@ async function updatePropertiesPage() {
       p.online_mode,
     );
 
+    setChecked(
+      "property-enforce-secure-profile",
+      p.enforce_secure_profile,
+    );
+
     setValue(
       "property-level-name",
       p.level_name,
@@ -3749,6 +3786,10 @@ async function saveServerProperties(
 
     online_mode: checkedOf(
       "property-online-mode",
+    ),
+
+    enforce_secure_profile: checkedOf(
+      "property-enforce-secure-profile",
     ),
 
     level_name: valueOf(
