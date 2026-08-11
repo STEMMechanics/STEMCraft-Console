@@ -1388,6 +1388,26 @@ button.restart:hover {
   background: #fff7f7;
 }
 
+.plugin-duplicate-option.just-added {
+  border-color: #ef9b48;
+  background: #fffaf3;
+  box-shadow: inset 3px 0 #ef7b22;
+}
+
+.plugin-just-added-label {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: #fff0da;
+  color: #a45714;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
 .plugin-duplicate-option > input {
   margin-top: 2px;
   accent-color: var(--danger);
@@ -1639,7 +1659,7 @@ button.restart:hover {
   display: grid;
 
   grid-template-columns:
-    minmax(0, 1fr) 110px 150px;
+    minmax(0, 1fr) 170px 110px 150px;
 
   align-items: center;
 }
@@ -1704,10 +1724,15 @@ button.restart:hover {
   color: #8a9099;
 }
 
-.file-size {
+.file-size,
+.file-modified {
   color: var(--muted);
 
   font-size: 12px;
+}
+
+.file-modified {
+  white-space: nowrap;
 }
 
 .file-actions {
@@ -3189,11 +3214,11 @@ input[type="checkbox"] {
   }
 
   .file-browser-header {
-    grid-template-columns: minmax(180px, 1fr) 80px 76px;
+    grid-template-columns: minmax(180px, 1fr) 145px 80px 76px;
   }
 
   .file-row {
-    min-width: 360px;
+    min-width: 520px;
   }
 
   .login-body {
@@ -3210,6 +3235,18 @@ input[type="checkbox"] {
 
   font-size: 10px;
   text-align: center;
+}
+
+.sidebar-version a,
+.login-version a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sidebar-version a:hover,
+.login-version a:hover {
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .login-help {

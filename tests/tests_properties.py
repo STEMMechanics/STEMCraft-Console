@@ -1,9 +1,12 @@
 from types import SimpleNamespace
 
 from app.properties_manager import (
+    get_properties_view,
     read_properties,
+    save_properties,
     write_properties,
 )
+from app.paper import create_server_properties
 
 
 def test_read_properties(
@@ -82,3 +85,23 @@ def test_write_properties_preserves_unknown_values(
         "# Keep this comment"
         in contents
     )
+
+
+def test_secure_profile_defaults_to_false_and_can_be_saved(tmp_path):
+    properties = tmp_path / "server.properties"
+    properties.write_text("online-mode=true\n", encoding="utf-8")
+    server = SimpleNamespace(directory=str(tmp_path))
+
+    assert get_properties_view(server)["enforce_secure_profile"] is False
+
+    save_properties(server, {"enforce_secure_profile": True})
+
+    assert read_properties(server)["enforce-secure-profile"] == "true"
+
+
+def test_new_server_disables_secure_profile_by_default(tmp_path):
+    create_server_properties(str(tmp_path), 25565)
+
+    properties = (tmp_path / "server.properties").read_text(encoding="utf-8")
+
+    assert "enforce-secure-profile=false" in properties

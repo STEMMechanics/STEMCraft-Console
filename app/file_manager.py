@@ -1,4 +1,5 @@
 import shutil
+from datetime import datetime
 
 from pathlib import Path
 
@@ -123,6 +124,11 @@ def list_directory(
 
             "is_dir":
                 item.is_dir(),
+
+            "modified":
+                datetime.fromtimestamp(
+                    stat.st_mtime
+                ),
 
             "size":
                 (

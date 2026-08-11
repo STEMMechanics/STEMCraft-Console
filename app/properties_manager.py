@@ -183,6 +183,13 @@ def get_properties_view(server) -> dict:
                 True,
             ),
 
+        "enforce_secure_profile":
+            bool_value(
+                props,
+                "enforce-secure-profile",
+                False,
+            ),
+
         "level_name":
             props.get(
                 "level-name",
@@ -335,6 +342,16 @@ def save_properties(
                 bool(
                     data.get(
                         "online_mode"
+                    )
+                )
+            ).lower(),
+
+        "enforce-secure-profile":
+            str(
+                bool(
+                    data.get(
+                        "enforce_secure_profile",
+                        False,
                     )
                 )
             ).lower(),

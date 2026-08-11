@@ -41,6 +41,7 @@
         <div class="file-browser-header">
 
             <span>Name</span>
+            <span>Modified</span>
             <span>Size</span>
             <span></span>
 
@@ -60,6 +61,7 @@
 
             </div>
 
+            <div></div>
             <div></div>
             <div></div>
 
@@ -109,6 +111,13 @@
                 {% endif %}
 
                 {% endif %}
+
+            </div>
+
+
+            <div class="file-modified">
+
+                {{ entry.modified.strftime("%d %b %Y, %H:%M") }}
 
             </div>
 

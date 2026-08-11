@@ -425,6 +425,9 @@ def create_server_properties(
         "online-mode":
             online_mode,
 
+        "enforce-secure-profile":
+            False,
+
         "white-list":
             whitelist,
 
