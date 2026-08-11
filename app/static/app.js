@@ -1106,11 +1106,17 @@ function renderPluginConfigActions(plugin, index) {
   }
 
   const selectId = `plugin-config-${index}`;
-  const options = files.map((path) =>
-    `<option value="${escapeHtml(path)}">${
-      escapeHtml(path.split("/").at(-1))
-    }</option>`
-  ).join("");
+  const pluginDirectory = plugin.config_directory
+    ? `plugins/${plugin.config_directory}/`
+    : "";
+  const options = files.map((path) => {
+    const displayPath = pluginDirectory && path.startsWith(pluginDirectory)
+      ? path.slice(pluginDirectory.length)
+      : path;
+    return `<option value="${escapeHtml(path)}" title="${escapeHtml(path)}">${
+      escapeHtml(displayPath)
+    }</option>`;
+  }).join("");
   return `<span class="plugin-config-picker"><button class="button" onclick="editSelectedPluginConfig('${selectId}')">Edit Config</button><select id="${selectId}" aria-label="Choose configuration file" title="Choose configuration file">${options}</select></span>`;
 }
 
