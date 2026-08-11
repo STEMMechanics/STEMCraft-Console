@@ -3786,6 +3786,29 @@ input[type="checkbox"] {
   border-radius: 8px;
 }
 
+.plugins-page.plugin-window-drag-active::after {
+  content: "Drop JAR to upload and install";
+  position: fixed;
+  inset: 14px;
+  z-index: 190;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  background: rgba(255, 248, 239, .94);
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.property-name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
 .plugin-install-heading {
   grid-column: 1 / -1;
 }
