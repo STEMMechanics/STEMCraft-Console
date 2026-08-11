@@ -71,13 +71,17 @@
                     <span>Server Port</span>
 
                     <input
+                        id="create-server-port"
                         name="port"
                         type="number"
                         value="25565"
                         min="1"
                         max="65535"
                         required
+                        oninput="checkServerPortWarning(this.value)"
                     >
+
+                    <small id="server-port-warning" class="port-conflict-warning" hidden></small>
 
                     <small>
                         Default: 25565
@@ -681,5 +685,6 @@ function selectRecommendedJava() {
 
 updateCreateServerButton();
 selectRecommendedJava();
+checkServerPortWarning(document.getElementById("create-server-port")?.value);
 
 </script>

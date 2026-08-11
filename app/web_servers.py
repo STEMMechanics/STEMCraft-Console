@@ -176,6 +176,55 @@ def get_accessible_server(
     return user, server
 
 
+def port_assignment_conflict(
+    db: Session,
+    port: int,
+    exclude_server_id: int | None = None,
+):
+    query = db.query(Server).filter(Server.port == port)
+    if exclude_server_id is not None:
+        query = query.filter(Server.id != exclude_server_id)
+    return query.order_by(Server.name).first()
+
+
+def downgrade_managed_port_conflict(db: Session, inspection: dict) -> None:
+    port = inspection.get("port")
+    if not isinstance(port, int):
+        return
+    conflict = port_assignment_conflict(db, port)
+    if not conflict:
+        return
+    inspection["errors"] = [
+        error for error in inspection.get("errors", [])
+        if error != f"Port {port} is already in use"
+    ]
+    warning = f"{conflict.name} is also assigned port {port}. Only one can run at a time."
+    if warning not in inspection.setdefault("warnings", []):
+        inspection["warnings"].append(warning)
+    inspection["ready"] = not inspection["errors"]
+
+
+@router.get("/api/web/servers/port-warning")
+def server_port_warning(
+    port: int,
+    request: Request,
+    exclude_server_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    user = current_web_user(request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not has_permission(user, "servers.create") and not has_permission(user, "servers.properties"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    conflict = port_assignment_conflict(db, port, exclude_server_id)
+    return {
+        "warning": (
+            f'{conflict.name} is also assigned port {port}. Only one of these servers can run at a time.'
+            if conflict else None
+        )
+    }
+
+
 # -------------------------------------------------------------------
 # Server list
 # -------------------------------------------------------------------
@@ -544,23 +593,6 @@ def create_server_web(
             detail=(
                 "Server name already exists"
             ),
-        )
-
-
-    port_in_use = (
-        db.query(Server)
-        .filter(
-            Server.port == port
-        )
-        .first()
-    )
-
-
-    if port_in_use:
-
-        raise HTTPException(
-            status_code=409,
-            detail="Port already assigned",
         )
 
 
@@ -1409,10 +1441,12 @@ async def inspect_import_path(request: Request, db: Session = Depends(get_db)):
     if not has_permission(user, "servers.create"):
         return JSONResponse({"error": "Admin required"}, status_code=403)
     data = await request.json()
-    return inspect_server_directory(
+    result = inspect_server_directory(
         str(data.get("directory", "")),
         process_backend=str(data.get("process_backend", "systemd")),
     )
+    downgrade_managed_port_conflict(db, result)
+    return result
 
 
 @router.post(
@@ -1459,6 +1493,7 @@ def import_server(
         process_backend=process_backend,
         verify_write=True,
     )
+    downgrade_managed_port_conflict(db, inspection)
     if not inspection["ready"]:
         raise HTTPException(status_code=400, detail="; ".join(inspection["errors"]))
     directory_path = Path(inspection["directory"])

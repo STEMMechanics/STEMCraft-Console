@@ -42,6 +42,7 @@ from .web_render import (
 
 from .web_servers import (
     get_accessible_server,
+    port_assignment_conflict,
 )
 from .permissions import has_permission
 from .java_runtime import (
@@ -313,6 +314,7 @@ async def save_properties_api(
         )
     stopped_for_save = False
     changes_committed = False
+    port_warning = None
 
     try:
 
@@ -401,6 +403,12 @@ async def save_properties_api(
             server.port = int(
                 data["server_port"]
             )
+            conflict = port_assignment_conflict(db, server.port, server.id)
+            if conflict:
+                port_warning = (
+                    f"{conflict.name} is also assigned port {server.port}. "
+                    "Only one of these servers can run at a time."
+                )
 
         register_server(server)
 
@@ -477,6 +485,7 @@ async def save_properties_api(
             if stopped_for_save
             else "Changes saved. They will apply when the server is next started."
         ),
+        "warning": port_warning,
         "running": running,
         "restart_required": running and not stopped_for_save,
         "restarted": stopped_for_save,

@@ -1914,6 +1914,18 @@ button.restart:hover {
   line-height: 1.45;
 }
 
+.property-field > .port-conflict-warning {
+  padding: 8px 10px;
+  background: #fff5e9;
+  border: 1px solid #f1d2aa;
+  border-radius: 6px;
+  color: #895b24;
+}
+
+.port-conflict-warning[hidden] {
+  display: none;
+}
+
 .startup-command-preview > code {
   display: block;
   overflow-x: auto;
@@ -2210,6 +2222,14 @@ body.system-operation-active {
 
 .toast-error > i {
   color: var(--danger);
+}
+
+.toast-warning {
+  border-left-color: #d98b21;
+}
+
+.toast-warning > i {
+  color: #d98b21;
 }
 
 .toast-info {
@@ -3897,6 +3917,8 @@ input[type="checkbox"] {
 .server-status-dot {
   height: 8px;
   width: 8px;
+  flex: 0 0 auto;
+  background: var(--danger);
   border-radius: 50%;
 }
 
