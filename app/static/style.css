@@ -851,6 +851,11 @@ button.restart:hover {
   padding: 8px 14px;
 }
 
+.console-command button:hover {
+  background: var(--accent);
+  filter: brightness(.8);
+}
+
 .console-command input:disabled,
 .console-command button:disabled {
   opacity: .45;
@@ -2396,7 +2401,8 @@ input[type="checkbox"] {
 }
 
 .login-button:hover {
-  filter: brightness(.96);
+  background: var(--accent);
+  filter: brightness(.8);
 }
 
 .login-error {
