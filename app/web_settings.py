@@ -27,7 +27,10 @@ from .web_users import current_web_user
 
 from .emailer import send_email
 from .settings_manager import (
+    DEFAULT_LOGIN_MESSAGE,
+    get_login_message,
     get_smtp_settings,
+    save_login_message,
     save_smtp_settings,
 )
 
@@ -205,6 +208,9 @@ def settings_page(
 
         "console_port":
             console_port,
+
+        "login_message":
+            get_login_message(db),
     })
 
     if has_permission(user, "users.manage"):
@@ -237,6 +243,37 @@ def settings_page(
         "partials/settings.html",
         context,
     )
+
+
+@router.post("/api/web/settings/login-message")
+async def update_login_message(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = current_web_user(request, db)
+
+    if not admin:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    if not has_permission(admin, "settings.manage"):
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+
+    data = await request.json()
+    message = str(data.get("login_message", "")).strip()
+
+    if len(message) > 300:
+        return JSONResponse(
+            {"error": "Login message must be 300 characters or fewer"},
+            status_code=400,
+        )
+
+    return {
+        "success": True,
+        "login_message": save_login_message(
+            db,
+            message or DEFAULT_LOGIN_MESSAGE,
+        ),
+    }
 
 
 @router.post(

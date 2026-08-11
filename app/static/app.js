@@ -4701,6 +4701,41 @@ async function updateSMTPSettings() {
   }
 }
 
+async function saveLoginMessage() {
+  const status = document.getElementById(
+    "login-message-save-status",
+  );
+  const input = document.getElementById(
+    "login-message",
+  );
+
+  if (!input) {
+    return;
+  }
+
+  const response = await fetch(
+    "/api/web/settings/login-message",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login_message: input.value }),
+    },
+  );
+  const data = await response.json();
+
+  if (!response.ok) {
+    if (status) {
+      status.textContent = data.error || "Unable to save login message.";
+    }
+    return;
+  }
+
+  input.value = data.login_message;
+  if (status) {
+    status.textContent = "Saved";
+  }
+}
+
 async function saveSMTPSettings() {
   const status = document.getElementById(
     "smtp-save-status",
