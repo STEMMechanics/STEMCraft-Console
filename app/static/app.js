@@ -1314,23 +1314,27 @@ function editPluginConfig(path) {
 }
 
 function parseConsoleLine(line) {
-  const match = line.match(
-    /^\[?(\d{2}:\d{2}:\d{2})\]?\s*(?:\[([^\]]+)\/(INFO|WARN|ERROR|DEBUG)\]:)?\s*(.*)$/i,
+  const cleanedLine = String(line)
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\u009b[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\u00a7[0-9A-FK-ORX]/gi, "");
+  const match = cleanedLine.match(
+    /^\[?(\d{2}:\d{2}:\d{2})(?:\s+(INFO|WARN|ERROR|DEBUG))?\]?:?\s*(?:\[([^\]]+)\/(INFO|WARN|ERROR|DEBUG)\]:?\s*)?(.*)$/i,
   );
 
   if (!match) {
     return {
       time: "",
       level: "INFO",
-      message: line,
+      message: cleanedLine,
     };
   }
 
   return {
     time: match[1] || "",
-    level: (match[3] || "INFO").toUpperCase(),
-    message: (match[2] ? `[${match[2]}] ` : "") +
-      (match[4] || ""),
+    level: (match[4] || match[2] || "INFO").toUpperCase(),
+    message: (match[3] ? `[${match[3]}] ` : "") +
+      (match[5] || ""),
   };
 }
 
