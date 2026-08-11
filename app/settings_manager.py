@@ -13,6 +13,20 @@ SMTP_DEFAULTS = {
     "smtp_from_address": "",
 }
 
+LOGIN_MESSAGE_KEY = "login_message"
+DEFAULT_LOGIN_MESSAGE = "Sign in to manage your Minecraft servers."
+
+
+def get_login_message(db: Session) -> str:
+    return get_setting(db, LOGIN_MESSAGE_KEY, DEFAULT_LOGIN_MESSAGE)
+
+
+def save_login_message(db: Session, message: str) -> str:
+    value = message.strip() or DEFAULT_LOGIN_MESSAGE
+    set_setting(db, LOGIN_MESSAGE_KEY, value)
+    db.commit()
+    return value
+
 
 def get_setting(
     db: Session,

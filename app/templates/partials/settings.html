@@ -202,6 +202,27 @@
     {% if user.can("settings.manage") %}
     <section class="overview-card settings-section">
         <div class="card-header">
+            Login Screen
+        </div>
+
+        <div class="settings-content">
+            <label class="property-field full-width">
+                <span>Sign-in Message</span>
+                <input id="login-message" maxlength="300" value="{{ login_message }}">
+                <small>Shown beneath “Welcome back” on the login screen. Leave blank to restore the default.</small>
+            </label>
+
+            <div class="settings-save-row">
+                <span id="login-message-save-status" class="muted-small"></span>
+                <button class="button" type="button" onclick="saveLoginMessage()">
+                    Save Login Message
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section class="overview-card settings-section">
+        <div class="card-header">
             <span>Off-site Backups - <small id="offsite-settings-status">Checking...</small></span>
             <div class="card-header-buttons">
                 <button class="settings-header-button" type="button" onclick="openOffsiteRemoteModal()"><i class="fa-solid fa-plus"></i> Add destination</button>

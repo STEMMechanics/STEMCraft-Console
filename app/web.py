@@ -25,6 +25,7 @@ from .models import Server, User
 from .processes import register_server, server_status
 from .player_manager import get_online_players
 from .permissions import has_permission
+from .settings_manager import get_login_message
 from .java_runtime import discover_java_runtimes, resolve_java_path
 
 from .auth import (
@@ -80,12 +81,18 @@ def _finish_web_login(request: Request, user: User) -> RedirectResponse:
     "/login",
     response_class=HTMLResponse,
 )
-def login_page(request: Request):
+def login_page(
+    request: Request,
+    db: Session = Depends(get_db),
+):
 
     return templates.TemplateResponse(
         request=request,
         name="login.html",
-        context={"app_version": APP_VERSION,},
+        context={
+            "app_version": APP_VERSION,
+            "login_message": get_login_message(db),
+        },
     )
 
 
@@ -120,6 +127,8 @@ def login_web(
                     "Incorrect username or password",
                 "app_version":
                     APP_VERSION,
+                "login_message":
+                    get_login_message(db),
             },
             status_code=401,
         )
