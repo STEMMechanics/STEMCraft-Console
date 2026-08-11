@@ -29,6 +29,7 @@ from .plugin_manager import (
     MAX_PLUGIN_BYTES,
     geyser_status,
     duplicate_plugin_groups,
+    PluginFileExistsError,
 )
 
 from .web_context import (
@@ -57,6 +58,7 @@ async def upload_plugin(server_id: int, request: Request, plugin: UploadFile = F
     if not server or not has_permission(user, "plugins.manage"):
         return JSONResponse({"error": "Administrator access required"}, status_code=403)
     filename = Path(plugin.filename or "").name
+    replace = request.query_params.get("replace") == "true"
     try:
         with tempfile.NamedTemporaryFile(prefix="stemcraft-plugin-", suffix=".jar") as temporary:
             total = 0
@@ -66,7 +68,7 @@ async def upload_plugin(server_id: int, request: Request, plugin: UploadFile = F
                     raise ValueError("Plugin exceeds the configured size limit")
                 temporary.write(chunk)
             temporary.flush()
-            result = install_plugin_file(server, Path(temporary.name), filename)
+            result = install_plugin_file(server, Path(temporary.name), filename, replace=replace)
         server.plugins_dirty = True
         db.commit()
         return {
@@ -74,6 +76,14 @@ async def upload_plugin(server_id: int, request: Request, plugin: UploadFile = F
             "restart_required": True,
             "duplicates": duplicate_plugin_groups(list_plugins(server)),
         }
+    except PluginFileExistsError as error:
+        return JSONResponse({
+            "error": str(error),
+            "code": "plugin_file_exists",
+            "filename": error.filename,
+            "enabled": error.enabled,
+            "suppress_toast": True,
+        }, status_code=409)
     except (ValueError, FileExistsError, OSError) as error:
         return JSONResponse({"error": str(error)}, status_code=400)
 
@@ -87,7 +97,11 @@ async def download_plugin(server_id: int, request: Request, db: Session = Depend
         return JSONResponse({"error": "Administrator access required"}, status_code=403)
     data = await request.json()
     try:
-        result = install_plugin_url(server, str(data.get("url", "")).strip())
+        result = install_plugin_url(
+            server,
+            str(data.get("url", "")).strip(),
+            replace=data.get("replace") is True,
+        )
         server.plugins_dirty = True
         db.commit()
         return {
@@ -95,6 +109,14 @@ async def download_plugin(server_id: int, request: Request, db: Session = Depend
             "restart_required": True,
             "duplicates": duplicate_plugin_groups(list_plugins(server)),
         }
+    except PluginFileExistsError as error:
+        return JSONResponse({
+            "error": str(error),
+            "code": "plugin_file_exists",
+            "filename": error.filename,
+            "enabled": error.enabled,
+            "suppress_toast": True,
+        }, status_code=409)
     except (ValueError, FileExistsError, OSError) as error:
         return JSONResponse({"error": str(error)}, status_code=400)
 

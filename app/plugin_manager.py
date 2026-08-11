@@ -14,6 +14,14 @@ from pathlib import Path
 MAX_PLUGIN_BYTES = int(os.getenv("STEMCRAFT_MAX_PLUGIN_BYTES", str(128 * 1024 * 1024)))
 
 
+class PluginFileExistsError(FileExistsError):
+    def __init__(self, filename: str, enabled: bool):
+        self.filename = filename
+        self.enabled = enabled
+        state = "enabled" if enabled else "disabled"
+        super().__init__(f"{filename} already exists and is currently {state}")
+
+
 def plugins_directory(server) -> Path:
     return Path(server.directory) / "plugins"
 
@@ -289,7 +297,7 @@ def validate_plugin_archive(path: Path) -> None:
         raise ValueError("Plugin is not a valid JAR archive") from error
 
 
-def install_plugin_file(server, source: Path, filename: str) -> dict:
+def install_plugin_file(server, source: Path, filename: str, replace: bool = False) -> dict:
     safe_name = Path(filename).name
     if safe_name != filename or not safe_name.lower().endswith(".jar"):
         raise ValueError("Plugin filename must be a local .jar filename")
@@ -297,12 +305,16 @@ def install_plugin_file(server, source: Path, filename: str) -> dict:
     directory = plugins_directory(server)
     directory.mkdir(parents=True, exist_ok=True)
     destination = safe_plugin_path(server, safe_name)
-    if destination.exists() or destination.with_name(destination.name + ".disabled").exists():
-        raise FileExistsError("Plugin already exists")
+    disabled_destination = destination.with_name(destination.name + ".disabled")
+    existing = destination if destination.exists() else disabled_destination if disabled_destination.exists() else None
+    if existing and not replace:
+        raise PluginFileExistsError(safe_name, existing == destination)
     temporary = directory / f".{safe_name}.upload"
     try:
         shutil.copyfile(source, temporary)
         os.replace(temporary, destination)
+        if disabled_destination.exists():
+            disabled_destination.unlink()
     finally:
         temporary.unlink(missing_ok=True)
     return plugin_info(destination)
@@ -331,7 +343,7 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(request, fp, code, message, headers, new_url)
 
 
-def install_plugin_url(server, url: str) -> dict:
+def install_plugin_url(server, url: str, replace: bool = False) -> dict:
     parsed = _validate_public_https_url(url)
     filename = Path(urllib.parse.unquote(parsed.path)).name
     if not filename.lower().endswith(".jar"):
@@ -354,7 +366,7 @@ def install_plugin_url(server, url: str) -> dict:
         if final_name.lower().endswith(".jar"):
             filename = final_name
         temporary.flush()
-        return install_plugin_file(server, Path(temporary.name), filename)
+        return install_plugin_file(server, Path(temporary.name), filename, replace=replace)
 
 
 def safe_plugin_path(
