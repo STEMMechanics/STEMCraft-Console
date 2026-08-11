@@ -59,10 +59,19 @@
 
             <div class="property-grid">
 
+                <div class="property-field full-width">
+                    <span>Server name</span>
+                    <div class="property-name-row">
+                        <input id="property-server-name" name="server_name" type="text" maxlength="100" required>
+                        <button id="rename-server-button" class="button" type="button" onclick="renameServer()">Rename server</button>
+                    </div>
+                    <small>Renaming also changes the instance directory and systemd service name.</small>
+                </div>
+
                 {% if user.role_name == "Administrator" %}
                 <div class="property-field full-width instance-directory-field">
                     <span>Instance directory</span>
-                    <code>{{ server.directory }}</code>
+                    <code id="property-instance-directory">{{ server.directory }}</code>
                     <small>Full filesystem path for this server instance.</small>
                 </div>
                 {% endif %}
@@ -603,6 +612,18 @@
             <div class="modal-actions">
                 <button class="button" type="button" onclick="closePropertiesRestartModal()">Cancel</button>
                 <button id="confirm-properties-restart" class="button restart" type="button" onclick="confirmPropertiesRestart()">Stop, save and restart</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="rename-server-modal" class="modal-backdrop" hidden>
+        <div class="modal-card">
+            <h2>Rename server and instance?</h2>
+            <p>This will rename the instance directory to <code id="rename-server-directory"></code> and the systemd service to <code id="rename-server-service"></code>.</p>
+            <p id="rename-server-running-note" class="modal-note"></p>
+            <div class="modal-actions">
+                <button class="button" type="button" onclick="closeRenameServerModal()">Cancel</button>
+                <button id="confirm-server-rename" class="button danger" type="button" onclick="confirmServerRename()">Rename server</button>
             </div>
         </div>
     </div>

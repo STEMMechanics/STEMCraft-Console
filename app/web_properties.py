@@ -13,8 +13,10 @@ from fastapi.responses import (
 
 from sqlalchemy.orm import Session
 from pathlib import Path
+import re
 
 from .database import get_db
+from .models import Server
 
 from .properties_manager import (
     get_properties_view,
@@ -53,6 +55,14 @@ from .advanced_properties import discover_advanced_properties, save_advanced_pro
 
 
 router = APIRouter()
+
+
+def server_name_slug(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9-]+", "-", name.casefold().replace(" ", "-"))
+    slug = re.sub(r"-+", "-", slug).strip("-")[:100]
+    if not slug:
+        raise ValueError("Server name must contain at least one letter or number")
+    return slug
 
 
 @router.get("/api/web/servers/{server_id}/advanced-properties")
@@ -227,6 +237,8 @@ def properties_data(
             "command": command,
         },
         "management": {
+            "name": server.name,
+            "directory": server.directory,
             "process_backend": server.process_backend,
             "service_name": server.service_name,
             "unit_name": status.get("unit_name"),
@@ -261,6 +273,172 @@ async def set_systemd_enabled_api(
         "success": True,
         "message": "Automatic startup enabled." if enabled else "Automatic startup disabled.",
         "enabled_at_boot": enabled,
+    }
+
+
+@router.post("/api/web/servers/{server_id}/name")
+async def rename_server_api(
+    server_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "servers.properties"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    data = await request.json()
+    name = str(data.get("name", "")).strip()
+    if not name:
+        return JSONResponse(
+            {"error": "Server name is required", "field": "server_name"},
+            status_code=400,
+        )
+    if len(name) > 100:
+        return JSONResponse(
+            {"error": "Server name cannot exceed 100 characters", "field": "server_name"},
+            status_code=400,
+        )
+    conflict = db.query(Server).filter(Server.name == name, Server.id != server.id).first()
+    if conflict:
+        return JSONResponse(
+            {"error": "Server name already exists", "field": "server_name"},
+            status_code=409,
+        )
+
+    try:
+        slug = server_name_slug(name)
+    except ValueError as error:
+        return JSONResponse(
+            {"error": str(error), "field": "server_name"},
+            status_code=400,
+        )
+
+    old_directory = Path(server.directory)
+    new_directory = old_directory.with_name(slug)
+    new_service_name = slug
+    directory_conflict = (
+        db.query(Server)
+        .filter(Server.directory == str(new_directory), Server.id != server.id)
+        .first()
+    )
+    service_conflict = (
+        db.query(Server)
+        .filter(Server.service_name == new_service_name, Server.id != server.id)
+        .first()
+    )
+    if directory_conflict or (new_directory != old_directory and new_directory.exists()):
+        return JSONResponse(
+            {"error": f"Server directory already exists: {new_directory}", "field": "server_name"},
+            status_code=409,
+        )
+    if service_conflict:
+        return JSONResponse(
+            {"error": f"Systemd service name already exists: {new_service_name}", "field": "server_name"},
+            status_code=409,
+        )
+    if not old_directory.exists():
+        return JSONResponse(
+            {"error": f"Server directory does not exist: {old_directory}", "field": "server_name"},
+            status_code=400,
+        )
+
+    register_server(server)
+    status = server_status(server.id)
+    was_running = bool(status.get("running"))
+    was_enabled_at_boot = server.process_backend == "systemd" and status.get("enabled_at_boot") is True
+    confirmed = data.get("confirm") is True
+    if not confirmed:
+        return JSONResponse({
+            "error": "Renaming changes the server directory and service name.",
+            "rename_confirmation_required": True,
+            "running": was_running,
+            "directory": str(new_directory),
+            "service_name": new_service_name,
+            "suppress_toast": True,
+        }, status_code=409)
+
+    old_name = server.name
+    old_service_name = server.service_name
+    directory_moved = False
+    new_registration = False
+    try:
+        if was_running:
+            stop_server_and_wait(server.id)
+        if was_enabled_at_boot:
+            set_systemd_enabled(server.id, False)
+        if new_directory != old_directory:
+            old_directory.rename(new_directory)
+            directory_moved = True
+        server.name = name
+        server.directory = str(new_directory)
+        server.service_name = new_service_name
+        register_server(server)
+        new_registration = True
+        if was_enabled_at_boot:
+            set_systemd_enabled(server.id, True)
+        db.commit()
+    except Exception as error:
+        db.rollback()
+        if was_enabled_at_boot and new_registration:
+            try:
+                set_systemd_enabled(server.id, False)
+            except Exception:
+                pass
+        server.name = old_name
+        server.directory = str(old_directory)
+        server.service_name = old_service_name
+        if directory_moved and new_directory.exists() and not old_directory.exists():
+            try:
+                new_directory.rename(old_directory)
+            except OSError:
+                pass
+        register_server(server)
+        if was_enabled_at_boot:
+            try:
+                set_systemd_enabled(server.id, True)
+            except Exception:
+                pass
+        if was_running and not server_status(server.id).get("running"):
+            try:
+                start_server(
+                    server.id,
+                    server.directory,
+                    server.memory,
+                    server.jar_name,
+                    server.java_args,
+                    server.min_memory,
+                    server.java_path,
+                )
+            except Exception:
+                pass
+        return JSONResponse({"error": f"Unable to rename server: {error}"}, status_code=400)
+
+    restart_warning = None
+    if was_running:
+        try:
+            start_server(
+                server.id,
+                server.directory,
+                server.memory,
+                server.jar_name,
+                server.java_args,
+                server.min_memory,
+                server.java_path,
+            )
+        except Exception as error:
+            restart_warning = (
+                f"Server renamed, but it could not be restarted automatically: {error}"
+            )
+
+    return {
+        "success": True,
+        "message": f"Server renamed to {name}.",
+        "server_name": name,
+        "directory": str(new_directory),
+        "service_name": new_service_name,
+        "restarted": was_running and restart_warning is None,
+        "warning": restart_warning,
     }
 
 

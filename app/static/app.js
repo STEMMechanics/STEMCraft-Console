@@ -904,6 +904,58 @@ function selectPluginJar(button) {
   input.click();
 }
 
+let pluginWindowDragDepth = 0;
+
+function pluginDropPage(event) {
+  const page = document.querySelector('.plugins-page[data-can-manage="true"]');
+  const hasFiles = Array.from(event.dataTransfer?.types || []).includes("Files");
+  return page && hasFiles ? page : null;
+}
+
+function clearPluginWindowDrag() {
+  pluginWindowDragDepth = 0;
+  document.querySelector(".plugins-page")
+    ?.classList.remove("plugin-window-drag-active");
+}
+
+document.addEventListener("dragenter", (event) => {
+  const page = pluginDropPage(event);
+  if (!page) return;
+  event.preventDefault();
+  pluginWindowDragDepth += 1;
+  page.classList.add("plugin-window-drag-active");
+});
+
+document.addEventListener("dragover", (event) => {
+  if (!pluginDropPage(event)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+});
+
+document.addEventListener("dragleave", (event) => {
+  if (!document.querySelector(".plugins-page.plugin-window-drag-active")) return;
+  event.preventDefault();
+  if (event.relatedTarget === null) {
+    clearPluginWindowDrag();
+    return;
+  }
+  pluginWindowDragDepth = Math.max(0, pluginWindowDragDepth - 1);
+  if (pluginWindowDragDepth === 0) clearPluginWindowDrag();
+});
+
+document.addEventListener("drop", async (event) => {
+  if (!pluginDropPage(event)) return;
+  event.preventDefault();
+  clearPluginWindowDrag();
+  const files = Array.from(event.dataTransfer?.files || []);
+  const status = document.getElementById("plugin-install-status");
+  if (files.length !== 1 || !files[0].name.toLowerCase().endsWith(".jar")) {
+    if (status) status.textContent = "Drop one JAR file at a time.";
+    return;
+  }
+  await installUploadedPlugin(files[0]);
+});
+
 async function uploadPluginJar(input) {
   if (!input.files?.length) return;
 
@@ -1176,7 +1228,7 @@ function renderPluginConfigActions(plugin, index) {
       escapeHtml(displayPath)
     }</option>`;
   }).join("");
-  return `<span class="plugin-config-picker"><button class="button" onclick="editSelectedPluginConfig('${selectId}')">Edit Config</button><select id="${selectId}" aria-label="Choose configuration file" title="Choose configuration file">${options}</select></span>`;
+  return `<span class="plugin-config-picker"><button class="button" onclick="editSelectedPluginConfig('${selectId}')">Edit Config</button><select id="${selectId}" aria-label="Choose and open configuration file" title="Choose and open configuration file" onchange="editPluginConfig(this.value)">${options}</select></span>`;
 }
 
 function pluginDuplicateGroupSignature(group) {
@@ -3337,6 +3389,9 @@ async function updatePropertiesPage() {
     const startup = data.startup || {};
     const management = data.management || {};
 
+    setValue("property-server-name", management.name || "");
+    const instanceDirectory = document.getElementById("property-instance-directory");
+    if (instanceDirectory) instanceDirectory.textContent = management.directory || "";
     setValue("property-process-backend", management.process_backend || "subprocess");
     const backendSelect = document.getElementById("property-process-backend");
     if (backendSelect) {
@@ -3815,6 +3870,87 @@ async function saveServerProperties(
     } else {
       restartAlert.hidden = true;
     }
+  }
+}
+
+async function renameServer() {
+  await submitServerRename(false);
+}
+
+async function submitServerRename(confirm) {
+  const page = document.querySelector(".properties-page");
+  const input = document.getElementById("property-server-name");
+  const button = document.getElementById("rename-server-button");
+  if (!page || !input || !button || !input.reportValidity()) return;
+  button.disabled = true;
+  try {
+    const response = await fetch(
+      `/api/web/servers/${page.dataset.serverId}/name`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: input.value, confirm }),
+      },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      if (data.rename_confirmation_required) {
+        openRenameServerModal(data);
+        return;
+      }
+      showFormError(
+        document.getElementById("properties-form"),
+        data.error || "Unable to rename server.",
+        "server_name",
+      );
+      return;
+    }
+    input.value = data.server_name;
+    const activeName = document.querySelector(
+      ".server-selector-button .server-selector-text strong",
+    );
+    if (activeName) activeName.textContent = data.server_name;
+    document.querySelectorAll(`#server-menu a[href="/servers/${page.dataset.serverId}"] strong`)
+      .forEach((name) => { name.textContent = data.server_name; });
+    const instanceDirectory = document.getElementById("property-instance-directory");
+    if (instanceDirectory) instanceDirectory.textContent = data.directory;
+    const serviceName = document.getElementById("property-service-name");
+    if (serviceName) serviceName.textContent = data.service_name;
+    if (data.warning) showToast(data.warning, "warning");
+    clearFieldError(input);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function openRenameServerModal(data) {
+  const modal = document.getElementById("rename-server-modal");
+  const directory = document.getElementById("rename-server-directory");
+  const service = document.getElementById("rename-server-service");
+  const runningNote = document.getElementById("rename-server-running-note");
+  if (!modal || !directory || !service || !runningNote) return;
+  directory.textContent = data.directory;
+  service.textContent = data.service_name;
+  runningNote.textContent = data.running
+    ? "The running server will be stopped safely and restarted after the rename. Players will be disconnected."
+    : "The server is stopped and will remain stopped after the rename.";
+  modal.hidden = false;
+}
+
+function closeRenameServerModal() {
+  const modal = document.getElementById("rename-server-modal");
+  if (modal) modal.hidden = true;
+}
+
+async function confirmServerRename() {
+  const button = document.getElementById("confirm-server-rename");
+  if (!button) return;
+  button.disabled = true;
+  closeRenameServerModal();
+  try {
+    await submitServerRename(true);
+  } finally {
+    button.disabled = false;
   }
 }
 
