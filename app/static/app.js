@@ -590,6 +590,7 @@ let playerData = null;
 let playerFilter = "all";
 let pluginData = [];
 let pluginPendingRemoval = null;
+let pluginPendingReplacement = null;
 let pluginRestartRequired = false;
 let pluginServerRunning = false;
 let pluginDuplicateGroups = [];
@@ -906,58 +907,116 @@ function selectPluginJar(button) {
 async function uploadPluginJar(input) {
   if (!input.files?.length) return;
 
+  const file = input.files[0];
+  await installUploadedPlugin(file);
+  input.value = "";
+}
+
+async function installUploadedPlugin(file, replace = false) {
   const page = document.querySelector(".plugins-page");
   const status = document.getElementById("plugin-install-status");
-  const form = input.form;
-  const button = form?.querySelector(".plugin-upload-button");
-  if (!page || !status || !form) return;
+  const button = document.querySelector(".plugin-upload-button");
+  if (!page || !status || !file) return;
 
   if (button) button.disabled = true;
-  status.textContent = "Uploading and validating...";
+  status.textContent = replace ? "Replacing and validating..." : "Uploading and validating...";
   try {
+    const formData = new FormData();
+    formData.append("plugin", file, file.name);
     const response = await fetch(
-      `/api/web/servers/${page.dataset.serverId}/plugins/upload`,
-      { method: "POST", body: new FormData(form) },
+      `/api/web/servers/${page.dataset.serverId}/plugins/upload${replace ? "?replace=true" : ""}`,
+      { method: "POST", body: formData },
     );
     const data = await response.json();
+    if (response.status === 409 && data.code === "plugin_file_exists") {
+      openPluginReplaceModal({ type: "upload", file }, data);
+      status.textContent = "Confirm whether to replace the existing plugin.";
+      return;
+    }
     if (!response.ok) throw new Error(data.error || "Plugin upload failed");
-    status.textContent = `${data.plugin.name} installed. Restart required.`;
-    form.reset();
+    status.textContent = `${data.plugin.name} ${replace ? "replaced" : "installed"}. Restart required.`;
     pluginRestartRequired = true;
     showPluginRestartAlert();
     await updatePluginsPage(true);
   } catch (error) {
     status.textContent = error.message;
   } finally {
-    input.value = "";
     if (button) button.disabled = false;
   }
 }
 
 async function downloadPluginUrl(event) {
   event.preventDefault();
+  await installPluginUrl(event.currentTarget.elements.url.value);
+}
+
+async function installPluginUrl(url, replace = false) {
   const page = document.querySelector(".plugins-page");
   const status = document.getElementById("plugin-install-status");
-  const form = event.currentTarget;
-  status.textContent = "Downloading and validating...";
+  const form = document.querySelector('.plugin-install-form input[name="url"]')?.form;
+  if (!page || !status || !form) return;
+  status.textContent = replace ? "Replacing and validating..." : "Downloading and validating...";
   try {
     const response = await fetch(
       `/api/web/servers/${page.dataset.serverId}/plugins/url`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: form.elements.url.value }),
+        body: JSON.stringify({ url, replace }),
       },
     );
     const data = await response.json();
+    if (response.status === 409 && data.code === "plugin_file_exists") {
+      openPluginReplaceModal({ type: "url", url }, data);
+      status.textContent = "Confirm whether to replace the existing plugin.";
+      return;
+    }
     if (!response.ok) throw new Error(data.error || "Plugin download failed");
-    status.textContent = `${data.plugin.name} installed. Restart required.`;
+    status.textContent = `${data.plugin.name} ${replace ? "replaced" : "installed"}. Restart required.`;
     form.reset();
     pluginRestartRequired = true;
     showPluginRestartAlert();
     await updatePluginsPage(true);
   } catch (error) {
     status.textContent = error.message;
+  }
+}
+
+function openPluginReplaceModal(pending, conflict) {
+  pluginPendingReplacement = pending;
+  const modal = document.getElementById("plugin-replace-modal");
+  const filename = document.getElementById("replace-plugin-filename");
+  const state = document.getElementById("replace-plugin-state");
+  if (!modal || !filename || !state) return;
+  filename.textContent = conflict.filename;
+  state.textContent = conflict.enabled
+    ? "The existing plugin is enabled. The replacement will take effect after the server restarts."
+    : "The existing plugin is disabled. Replacing it will install the new build as enabled.";
+  modal.hidden = false;
+}
+
+function closePluginReplaceModal() {
+  const modal = document.getElementById("plugin-replace-modal");
+  if (modal) modal.hidden = true;
+  pluginPendingReplacement = null;
+}
+
+async function confirmPluginReplacement() {
+  const pending = pluginPendingReplacement;
+  const modal = document.getElementById("plugin-replace-modal");
+  const button = document.getElementById("confirm-plugin-replace");
+  if (!pending || !button) return;
+  button.disabled = true;
+  if (modal) modal.hidden = true;
+  pluginPendingReplacement = null;
+  try {
+    if (pending.type === "upload") {
+      await installUploadedPlugin(pending.file, true);
+    } else {
+      await installPluginUrl(pending.url, true);
+    }
+  } finally {
+    button.disabled = false;
   }
 }
 

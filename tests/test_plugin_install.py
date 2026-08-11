@@ -5,13 +5,13 @@ import pytest
 
 from app.plugin_manager import (
     _validate_public_https_url, duplicate_plugin_groups, geyser_status,
-    enable_plugin, install_plugin_file, list_plugins,
+    enable_plugin, install_plugin_file, list_plugins, PluginFileExistsError,
 )
 
 
-def make_plugin(path):
+def make_plugin(path, version="1.0"):
     with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("plugin.yml", "name: Example\nversion: 1.0\n")
+        archive.writestr("plugin.yml", f"name: Example\nversion: {version}\n")
 
 
 def test_install_plugin_file_validates_and_installs_atomically(tmp_path):
@@ -23,6 +23,52 @@ def test_install_plugin_file_validates_and_installs_atomically(tmp_path):
 
     assert result["name"] == "Example"
     assert (server_root / "plugins" / "example.jar").is_file()
+
+
+def test_install_plugin_file_requires_confirmation_before_replacing(tmp_path):
+    server_root = tmp_path / "server"
+    first = tmp_path / "first.jar"
+    second = tmp_path / "second.jar"
+    make_plugin(first)
+    make_plugin(second, version="2.0")
+    server = SimpleNamespace(directory=str(server_root))
+
+    install_plugin_file(server, first, "example.jar")
+    with pytest.raises(PluginFileExistsError) as conflict:
+        install_plugin_file(server, second, "example.jar")
+
+    assert conflict.value.filename == "example.jar"
+    assert conflict.value.enabled is True
+
+    result = install_plugin_file(server, second, "example.jar", replace=True)
+
+    assert result["filename"] == "example.jar"
+    assert result["version"] == "2.0"
+    assert [plugin["filename"] for plugin in list_plugins(server)] == ["example.jar"]
+
+
+def test_replacing_disabled_plugin_installs_new_build_as_enabled(tmp_path):
+    server_root = tmp_path / "server"
+    first = tmp_path / "first.jar"
+    second = tmp_path / "second.jar"
+    make_plugin(first)
+    make_plugin(second, version="2.0")
+    server = SimpleNamespace(directory=str(server_root))
+    install_plugin_file(server, first, "example.jar")
+    (server_root / "plugins" / "example.jar").rename(
+        server_root / "plugins" / "example.jar.disabled"
+    )
+
+    with pytest.raises(PluginFileExistsError) as conflict:
+        install_plugin_file(server, second, "example.jar")
+
+    assert conflict.value.enabled is False
+
+    result = install_plugin_file(server, second, "example.jar", replace=True)
+
+    assert result["enabled"] is True
+    assert result["version"] == "2.0"
+    assert not (server_root / "plugins" / "example.jar.disabled").exists()
 
 
 def test_install_plugin_file_rejects_non_plugin_jar(tmp_path):
