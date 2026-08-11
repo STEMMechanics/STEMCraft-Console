@@ -28,6 +28,7 @@ from .plugin_manager import (
     install_plugin_url,
     MAX_PLUGIN_BYTES,
     geyser_status,
+    duplicate_plugin_groups,
 )
 
 from .web_context import (
@@ -42,6 +43,7 @@ from .web_servers import (
     get_accessible_server,
 )
 from .permissions import has_permission
+from .processes import server_status
 
 
 router = APIRouter()
@@ -67,7 +69,11 @@ async def upload_plugin(server_id: int, request: Request, plugin: UploadFile = F
             result = install_plugin_file(server, Path(temporary.name), filename)
         server.plugins_dirty = True
         db.commit()
-        return {"plugin": result, "restart_required": True}
+        return {
+            "plugin": result,
+            "restart_required": True,
+            "duplicates": duplicate_plugin_groups(list_plugins(server)),
+        }
     except (ValueError, FileExistsError, OSError) as error:
         return JSONResponse({"error": str(error)}, status_code=400)
 
@@ -84,7 +90,11 @@ async def download_plugin(server_id: int, request: Request, db: Session = Depend
         result = install_plugin_url(server, str(data.get("url", "")).strip())
         server.plugins_dirty = True
         db.commit()
-        return {"plugin": result, "restart_required": True}
+        return {
+            "plugin": result,
+            "restart_required": True,
+            "duplicates": duplicate_plugin_groups(list_plugins(server)),
+        }
     except (ValueError, FileExistsError, OSError) as error:
         return JSONResponse({"error": str(error)}, status_code=400)
 
@@ -177,8 +187,52 @@ def plugins_data(
 
         "geyser": geyser_status(server, plugins),
 
+        "duplicates": duplicate_plugin_groups(plugins),
+
         "restart_required":
             server.plugins_dirty,
+
+        "running":
+            bool(server_status(server.id).get("running")),
+    }
+
+
+@router.post("/api/web/servers/{server_id}/plugins/duplicates/resolve")
+async def resolve_plugin_duplicates(
+    server_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "plugins.manage"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    data = await request.json()
+    filenames = data.get("disable")
+    if not isinstance(filenames, list) or not all(isinstance(item, str) for item in filenames):
+        return JSONResponse({"error": "Select valid plugin files"}, status_code=400)
+    allowed = {
+        plugin["filename"]
+        for group in duplicate_plugin_groups(list_plugins(server))
+        for plugin in group["plugins"]
+    }
+    selected = list(dict.fromkeys(filenames))
+    if any(filename not in allowed for filename in selected):
+        return JSONResponse({"error": "Plugin selection is no longer valid"}, status_code=409)
+    try:
+        for filename in selected:
+            disable_plugin(server, filename)
+    except (ValueError, FileNotFoundError, FileExistsError, OSError) as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    if selected:
+        server.plugins_dirty = True
+        db.commit()
+    return {
+        "success": True,
+        "message": f"Disabled {len(selected)} duplicate plugin file(s).",
+        "restart_required": bool(selected),
+        "duplicates": duplicate_plugin_groups(list_plugins(server)),
     }
 
 @router.post(

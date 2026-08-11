@@ -85,6 +85,8 @@ def plugin_info(
     path: Path,
 ) -> dict:
 
+    file_stat = path.stat()
+
     disabled = (
         path.name.endswith(
             ".jar.disabled"
@@ -152,7 +154,10 @@ def plugin_info(
             not disabled,
 
         "size":
-            path.stat().st_size,
+            file_stat.st_size,
+
+        "modified_ns":
+            str(file_stat.st_mtime_ns),
 
         "config_directory":
             (
@@ -164,7 +169,14 @@ def plugin_info(
                 else None
             ),
 
-        "config_files": sorted(config_files, key=str.lower),
+        "config_files": sorted(
+            config_files,
+            key=lambda config_path: (
+                0 if Path(config_path).name.lower() == "config.yml" else 1,
+                len(Path(config_path).parts) if Path(config_path).name.lower() == "config.yml" else 0,
+                config_path.lower(),
+            ),
+        ),
     }
 
 
@@ -201,6 +213,33 @@ def geyser_status(server, plugins: list[dict] | None = None) -> dict:
     return {"installed": True, "enabled": bool(geyser["enabled"]), "port": port}
 
 
+def duplicate_plugin_groups(plugins: list[dict]) -> list[dict]:
+    grouped: dict[str, list[dict]] = {}
+    display_names: dict[str, str] = {}
+    for plugin in plugins:
+        if not plugin.get("enabled"):
+            continue
+        name = str(plugin.get("name") or "").strip()
+        key = name.casefold()
+        if not key:
+            continue
+        display_names.setdefault(key, name)
+        item = {
+            "filename": plugin["filename"],
+            "version": plugin.get("version"),
+        }
+        if plugin.get("size") is not None:
+            item["size"] = plugin["size"]
+        if plugin.get("modified_ns") is not None:
+            item["modified_ns"] = plugin["modified_ns"]
+        grouped.setdefault(key, []).append(item)
+    return [
+        {"name": display_names[key], "plugins": sorted(items, key=lambda item: item["filename"].lower())}
+        for key, items in sorted(grouped.items())
+        if len(items) > 1
+    ]
+
+
 def list_plugins(server) -> list[dict]:
 
     directory = plugins_directory(
@@ -232,8 +271,10 @@ def list_plugins(server) -> list[dict]:
 
     return sorted(
         plugins,
-        key=lambda plugin:
-            plugin["name"].lower(),
+        key=lambda plugin: (
+            plugin["name"].casefold(),
+            plugin["filename"].removesuffix(".disabled").casefold(),
+        ),
     )
 
 

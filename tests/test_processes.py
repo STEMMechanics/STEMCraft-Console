@@ -130,6 +130,24 @@ def test_start_rejects_port_used_by_another_running_server(monkeypatch):
         processes.start_server(2, "/srv/second")
 
 
+def test_panel_owned_command_is_echoed_to_console(monkeypatch):
+    class Input:
+        def write(self, _value):
+            pass
+
+        def flush(self):
+            pass
+
+    process = SimpleNamespace(stdin=Input(), poll=lambda: None)
+    monkeypatch.setattr(processes, "_systemd_config", lambda _server_id: None)
+    monkeypatch.setitem(processes.processes, 7, process)
+    processes.console_buffers.pop(7, None)
+
+    processes.send_command(7, "say Hello")
+
+    assert list(processes.console_buffers[7]) == ["[Panel command] > say Hello"]
+
+
 def test_systemctl_stop_does_not_disable_instance(monkeypatch):
     captured = {}
     monkeypatch.setattr(processes.subprocess, "run", lambda command, **kwargs: captured.update(command=command))

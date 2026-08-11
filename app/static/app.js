@@ -419,6 +419,16 @@ setInterval(
 document.body.addEventListener(
   "htmx:afterSwap",
   function () {
+    const serverPage = document.querySelector("#page-content > [data-server-id]");
+    const topbar = document.querySelector(".topbar[data-server-id]");
+    if (
+      serverPage?.dataset.serverId &&
+      topbar?.dataset.serverId &&
+      serverPage.dataset.serverId !== topbar.dataset.serverId
+    ) {
+      window.location.reload();
+      return;
+    }
     if (document.querySelector(".console-page")) {
       lastConsoleSignature = "";
     }
@@ -490,6 +500,12 @@ async function updateServerStatus() {
     }
 
     const data = await response.json();
+
+    const pluginsPage = document.querySelector(".plugins-page");
+    if (pluginsPage?.dataset.serverId === serverId) {
+      pluginServerRunning = data.running === true;
+      showPluginRestartAlert();
+    }
 
     if (data.running) {
       statusText.textContent = "Running";
@@ -575,6 +591,12 @@ let playerFilter = "all";
 let pluginData = [];
 let pluginPendingRemoval = null;
 let pluginRestartRequired = false;
+let pluginServerRunning = false;
+let pluginDuplicateGroups = [];
+let duplicatePluginFilenames = new Set();
+let duplicatePluginDetails = new Map();
+let sessionAcknowledgedPluginDuplicates = new Set();
+const acknowledgedPluginDuplicatesKey = "stemcraft.acknowledgedPluginDuplicates";
 
 let pendingFilePath = null;
 
@@ -810,7 +832,7 @@ async function confirmDeleteFile() {
   reloadFilesPage();
 }
 
-async function updatePluginsPage() {
+async function updatePluginsPage(forceDuplicatePrompt = false) {
   const page = document.querySelector(
     ".plugins-page",
   );
@@ -819,9 +841,11 @@ async function updatePluginsPage() {
     return;
   }
 
+  const serverId = page.dataset.serverId;
+
   try {
     const response = await fetch(
-      `/api/web/servers/${page.dataset.serverId}/plugins`,
+      `/api/web/servers/${serverId}/plugins`,
     );
 
     if (!response.ok) {
@@ -830,19 +854,37 @@ async function updatePluginsPage() {
 
     const data = await response.json();
 
-    pluginData = data.plugins || [];
-
-    pluginRestartRequired = data.restart_required === true;
-
-    const restartAlert = document.getElementById(
-      "plugin-restart-alert",
-    );
-
-    if (restartAlert) {
-      restartAlert.hidden = !pluginRestartRequired;
+    const currentPage = document.querySelector(".plugins-page");
+    if (!page.isConnected || currentPage?.dataset.serverId !== serverId) {
+      return;
     }
 
+    pluginData = data.plugins || [];
+    pluginDuplicateGroups = data.duplicates || [];
+    duplicatePluginFilenames = new Set(
+      pluginDuplicateGroups.flatMap((group) =>
+        group.plugins.map((plugin) => plugin.filename)
+      ),
+    );
+    duplicatePluginDetails = new Map();
+    for (const group of pluginDuplicateGroups) {
+      for (const plugin of group.plugins) {
+        duplicatePluginDetails.set(
+          plugin.filename,
+          group.plugins
+            .filter((candidate) => candidate.filename !== plugin.filename)
+            .map((candidate) => candidate.filename),
+        );
+      }
+    }
+
+    pluginRestartRequired = data.restart_required === true;
+    pluginServerRunning = data.running === true;
+
+    showPluginRestartAlert();
+
     renderPlugins();
+    showPluginDuplicatesModal(forceDuplicatePrompt);
   } catch {
     const list = document.getElementById(
       "plugin-list",
@@ -854,11 +896,23 @@ async function updatePluginsPage() {
   }
 }
 
-async function uploadPluginJar(event) {
-  event.preventDefault();
+function selectPluginJar(button) {
+  const input = button.form?.elements.plugin;
+  if (!input) return;
+  input.value = "";
+  input.click();
+}
+
+async function uploadPluginJar(input) {
+  if (!input.files?.length) return;
+
   const page = document.querySelector(".plugins-page");
   const status = document.getElementById("plugin-install-status");
-  const form = event.currentTarget;
+  const form = input.form;
+  const button = form?.querySelector(".plugin-upload-button");
+  if (!page || !status || !form) return;
+
+  if (button) button.disabled = true;
   status.textContent = "Uploading and validating...";
   try {
     const response = await fetch(
@@ -869,22 +923,14 @@ async function uploadPluginJar(event) {
     if (!response.ok) throw new Error(data.error || "Plugin upload failed");
     status.textContent = `${data.plugin.name} installed. Restart required.`;
     form.reset();
-    updatePluginFileName(form.elements.plugin);
     pluginRestartRequired = true;
     showPluginRestartAlert();
-    updatePluginsPage();
+    await updatePluginsPage(true);
   } catch (error) {
     status.textContent = error.message;
-  }
-}
-
-function updatePluginFileName(input) {
-  const name = input
-    .closest(".plugin-file-picker")
-    ?.querySelector(".plugin-file-name");
-
-  if (name) {
-    name.textContent = input.files?.[0]?.name || "No file selected";
+  } finally {
+    input.value = "";
+    if (button) button.disabled = false;
   }
 }
 
@@ -909,7 +955,7 @@ async function downloadPluginUrl(event) {
     form.reset();
     pluginRestartRequired = true;
     showPluginRestartAlert();
-    updatePluginsPage();
+    await updatePluginsPage(true);
   } catch (error) {
     status.textContent = error.message;
   }
@@ -968,6 +1014,7 @@ function renderPlugins() {
                 <div class="
                     plugin-row
                     ${plugin.enabled ? "" : "disabled"}
+                    ${duplicatePluginFilenames.has(plugin.filename) ? "duplicate" : ""}
                 ">
 
                     <div class="plugin-main">
@@ -1001,6 +1048,13 @@ function renderPlugins() {
     }">
                                 ${plugin.enabled ? "Active" : "Disabled"}
                             </span>
+
+                            ${duplicatePluginDetails.has(plugin.filename) ? `
+                                <span class="plugin-duplicate-label" title="Another enabled JAR identifies as ${escapeHtml(plugin.name)}">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    Possible duplicate of ${escapeHtml(duplicatePluginDetails.get(plugin.filename).join(", "))}
+                                </span>
+                            ` : ""}
 
                         </div>
 
@@ -1058,6 +1112,181 @@ function renderPluginConfigActions(plugin, index) {
     }</option>`
   ).join("");
   return `<span class="plugin-config-picker"><button class="button" onclick="editSelectedPluginConfig('${selectId}')">Edit Config</button><select id="${selectId}" aria-label="Choose configuration file" title="Choose configuration file">${options}</select></span>`;
+}
+
+function pluginDuplicateGroupSignature(group) {
+  const serverId = document.querySelector(".plugins-page")?.dataset.serverId || "";
+  return `${serverId}:${JSON.stringify({
+    name: group.name,
+    files: group.plugins.map((plugin) => ({
+      filename: plugin.filename,
+      version: plugin.version || null,
+      size: plugin.size ?? null,
+      modified_ns: plugin.modified_ns ?? null,
+    })).sort((left, right) => left.filename.localeCompare(right.filename)),
+  })}`;
+}
+
+function acknowledgedPluginDuplicates() {
+  const acknowledged = new Set(sessionAcknowledgedPluginDuplicates);
+  try {
+    const stored = JSON.parse(localStorage.getItem(acknowledgedPluginDuplicatesKey) || "[]");
+    if (Array.isArray(stored)) {
+      for (const signature of stored) acknowledged.add(signature);
+    }
+  } catch {
+    // Session acknowledgements still prevent repeated prompts.
+  }
+  return acknowledged;
+}
+
+function storeAcknowledgedPluginDuplicates(acknowledged) {
+  sessionAcknowledgedPluginDuplicates = new Set(acknowledged);
+  try {
+    localStorage.setItem(
+      acknowledgedPluginDuplicatesKey,
+      JSON.stringify(Array.from(acknowledged).slice(-100)),
+    );
+  } catch {
+    // The warning still remains dismissed for this page load when storage is unavailable.
+  }
+}
+
+function prunePluginDuplicateAcknowledgements() {
+  const serverId = document.querySelector(".plugins-page")?.dataset.serverId || "";
+  if (!serverId) return;
+  const current = new Set(
+    pluginDuplicateGroups.map((group) => pluginDuplicateGroupSignature(group)),
+  );
+  const acknowledged = acknowledgedPluginDuplicates();
+  for (const signature of acknowledged) {
+    if (signature.startsWith(`${serverId}:`) && !current.has(signature)) {
+      acknowledged.delete(signature);
+    }
+  }
+  storeAcknowledgedPluginDuplicates(acknowledged);
+}
+
+function showPluginDuplicatesModal() {
+  const modal = document.getElementById("plugin-duplicates-modal");
+  const container = document.getElementById("plugin-duplicate-groups");
+  if (!modal || !container) return;
+  prunePluginDuplicateAcknowledgements();
+  if (!pluginDuplicateGroups.length) {
+    modal.hidden = true;
+    return;
+  }
+  const acknowledged = acknowledgedPluginDuplicates();
+  const groupsToShow = pluginDuplicateGroups.filter(
+    (group) => !acknowledged.has(pluginDuplicateGroupSignature(group)),
+  );
+  if (!groupsToShow.length) {
+    modal.hidden = true;
+    return;
+  }
+  modal.dataset.groupSignatures = JSON.stringify(
+    groupsToShow.map((group) => pluginDuplicateGroupSignature(group)),
+  );
+  container.replaceChildren();
+  for (const group of groupsToShow) {
+    const section = document.createElement("div");
+    section.className = "plugin-duplicate-group";
+    const header = document.createElement("div");
+    header.className = "plugin-duplicate-group-header";
+    const title = document.createElement("strong");
+    title.textContent = group.name;
+    const count = document.createElement("span");
+    count.textContent = `${group.plugins.length} enabled`;
+    header.append(title, count);
+    section.appendChild(header);
+    for (const plugin of group.plugins) {
+      const label = document.createElement("label");
+      label.className = "plugin-duplicate-option";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = plugin.filename;
+      checkbox.checked = true;
+      checkbox.setAttribute("aria-label", `Enable ${plugin.filename}`);
+      checkbox.addEventListener("change", () => {
+        label.classList.toggle("will-disable", !checkbox.checked);
+        state.textContent = checkbox.checked ? "Enabled" : "Will be disabled";
+        updateDuplicatePluginButton();
+      });
+      const description = document.createElement("span");
+      description.className = "plugin-duplicate-description";
+      const filename = document.createElement("strong");
+      filename.textContent = plugin.filename;
+      description.appendChild(filename);
+      if (plugin.version) {
+        const version = document.createElement("small");
+        version.textContent = `Version ${plugin.version}`;
+        description.appendChild(version);
+      }
+      const state = document.createElement("small");
+      state.className = "plugin-duplicate-state";
+      state.textContent = "Enabled";
+      description.appendChild(state);
+      label.append(checkbox, description);
+      section.appendChild(label);
+    }
+    container.appendChild(section);
+  }
+  updateDuplicatePluginButton();
+  modal.hidden = false;
+}
+
+function updateDuplicatePluginButton() {
+  const button = document.getElementById("disable-selected-duplicates");
+  if (button) {
+    button.disabled = !document.querySelector(
+      '#plugin-duplicate-groups input[type="checkbox"]:not(:checked)',
+    );
+  }
+}
+
+function keepDuplicatePluginsEnabled() {
+  const modal = document.getElementById("plugin-duplicates-modal");
+  const acknowledged = acknowledgedPluginDuplicates();
+  try {
+    const signatures = JSON.parse(modal?.dataset.groupSignatures || "[]");
+    for (const signature of signatures) acknowledged.add(signature);
+    storeAcknowledgedPluginDuplicates(acknowledged);
+  } catch {
+    if (modal?.dataset.groupSignatures) {
+      sessionAcknowledgedPluginDuplicates.add(modal.dataset.groupSignatures);
+    }
+  }
+  if (modal) modal.hidden = true;
+}
+
+async function disableSelectedDuplicatePlugins() {
+  const page = document.querySelector(".plugins-page");
+  const button = document.getElementById("disable-selected-duplicates");
+  if (!page || !button) return;
+  const selected = Array.from(document.querySelectorAll(
+    '#plugin-duplicate-groups input[type="checkbox"]:not(:checked)',
+  )).map((checkbox) => checkbox.value);
+  if (!selected.length) return;
+  button.disabled = true;
+  const response = await fetch(
+    `/api/web/servers/${page.dataset.serverId}/plugins/duplicates/resolve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ disable: selected }),
+    },
+  );
+  const data = await response.json();
+  if (!response.ok) {
+    showToast(data.error || "Unable to disable duplicate plugins", "error");
+    button.disabled = false;
+    return;
+  }
+  const modal = document.getElementById("plugin-duplicates-modal");
+  if (modal) modal.hidden = true;
+  pluginRestartRequired = true;
+  showPluginRestartAlert();
+  await updatePluginsPage();
 }
 
 function editSelectedPluginConfig(selectId) {
@@ -2209,10 +2438,23 @@ function showPluginRestartAlert() {
   const alert = document.getElementById(
     "plugin-restart-alert",
   );
+  const icon = document.getElementById("plugin-change-alert-icon");
+  const message = document.getElementById("plugin-change-alert-message");
+  const label = document.getElementById("plugin-change-alert-label");
 
-  if (alert) {
-    alert.hidden = false;
-  }
+  if (!alert) return;
+  alert.hidden = !pluginRestartRequired;
+  if (!pluginRestartRequired || !icon || !message || !label) return;
+
+  icon.className = pluginServerRunning
+    ? "fa-solid fa-rotate"
+    : "fa-solid fa-circle-info";
+  message.textContent = pluginServerRunning
+    ? "Plugin changes are pending. Restart the server to apply them."
+    : "Plugin changes will apply when the server is next started.";
+  label.textContent = pluginServerRunning
+    ? "Restart required"
+    : "Applies on next start";
 }
 
 document.addEventListener(
@@ -4949,7 +5191,10 @@ async function serverAction(
 
     // Give the process a moment to change state.
     setTimeout(
-      updateServerStatus,
+      async () => {
+        await updateServerStatus();
+        await updatePluginsPage();
+      },
       500,
     );
   } catch (error) {

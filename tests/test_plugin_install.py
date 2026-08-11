@@ -3,7 +3,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.plugin_manager import _validate_public_https_url, geyser_status, install_plugin_file, list_plugins
+from app.plugin_manager import (
+    _validate_public_https_url, duplicate_plugin_groups, geyser_status,
+    enable_plugin, install_plugin_file, list_plugins,
+)
 
 
 def make_plugin(path):
@@ -52,12 +55,17 @@ def test_plugin_info_discovers_yaml_configs_and_geyser_port(tmp_path):
     config_dir.mkdir()
     (config_dir / "config.yml").write_text("bedrock:\n  port: 19132\n")
     (config_dir / "messages.yaml").write_text("hello: world\n")
+    (config_dir / "advanced.yml").write_text("feature: true\n")
+    (config_dir / "worlds").mkdir()
+    (config_dir / "worlds/config.yml").write_text("world: true\n")
     server = SimpleNamespace(directory=str(server_root))
 
     plugins = list_plugins(server)
 
     assert plugins[0]["config_files"] == [
         "plugins/Geyser-Spigot/config.yml",
+        "plugins/Geyser-Spigot/worlds/config.yml",
+        "plugins/Geyser-Spigot/advanced.yml",
         "plugins/Geyser-Spigot/messages.yaml",
     ]
     assert geyser_status(server, plugins) == {
@@ -65,3 +73,71 @@ def test_plugin_info_discovers_yaml_configs_and_geyser_port(tmp_path):
         "enabled": True,
         "port": 19132,
     }
+
+
+def test_duplicate_plugins_only_include_multiple_enabled_versions():
+    plugins = [
+        {"name": "WorldEdit", "filename": "worldedit-1.jar", "version": "1", "enabled": True},
+        {"name": "worldedit", "filename": "worldedit-2.jar", "version": "2", "enabled": True},
+        {"name": "WorldEdit", "filename": "worldedit-old.jar.disabled", "version": "0", "enabled": False},
+        {"name": "LuckPerms", "filename": "luckperms.jar", "version": "5", "enabled": True},
+    ]
+
+    assert duplicate_plugin_groups(plugins) == [{
+        "name": "WorldEdit",
+        "plugins": [
+            {"filename": "worldedit-1.jar", "version": "1"},
+            {"filename": "worldedit-2.jar", "version": "2"},
+        ],
+    }]
+
+
+def test_duplicate_plugin_groups_include_file_identity_when_available():
+    plugins = [
+        {
+            "name": "Example",
+            "filename": "example-1.jar",
+            "version": "1",
+            "enabled": True,
+            "size": 123,
+            "modified_ns": "1000",
+        },
+        {
+            "name": "Example",
+            "filename": "example-2.jar",
+            "version": "2",
+            "enabled": True,
+            "size": 456,
+            "modified_ns": "2000",
+        },
+    ]
+
+    group = duplicate_plugin_groups(plugins)[0]
+
+    assert group["plugins"][0] == {
+        "filename": "example-1.jar",
+        "version": "1",
+        "size": 123,
+        "modified_ns": "1000",
+    }
+
+
+def test_plugin_order_does_not_change_when_enabled(tmp_path):
+    server_root = tmp_path / "server"
+    plugin_dir = server_root / "plugins"
+    plugin_dir.mkdir(parents=True)
+    make_plugin(plugin_dir / "zeta.jar")
+    make_plugin(plugin_dir / "alpha.jar.disabled")
+    server = SimpleNamespace(directory=str(server_root))
+
+    assert [plugin["filename"] for plugin in list_plugins(server)] == [
+        "alpha.jar.disabled",
+        "zeta.jar",
+    ]
+
+    enable_plugin(server, "alpha.jar.disabled")
+
+    assert [plugin["filename"] for plugin in list_plugins(server)] == [
+        "alpha.jar",
+        "zeta.jar",
+    ]
