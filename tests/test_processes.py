@@ -91,18 +91,28 @@ def test_register_server_rejects_unsafe_systemd_instance():
         register_server(server)
 
 
+def test_systemd_availability_requires_linux_systemd(monkeypatch, tmp_path):
+    monkeypatch.setattr(processes.sys, "platform", "darwin")
+    monkeypatch.setattr(processes.shutil, "which", lambda _command: "/usr/bin/systemctl")
+    assert processes.systemd_available() is False
+
+    monkeypatch.setattr(processes.sys, "platform", "linux")
+    monkeypatch.setattr(processes.shutil, "which", lambda _command: None)
+    assert processes.systemd_available() is False
+
+
 def test_systemctl_uses_argument_list_without_shell(monkeypatch):
     captured = {}
     monkeypatch.setattr(processes.subprocess, "run", lambda command, **kwargs: captured.update(command=command, kwargs=kwargs))
     config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
     processes._systemctl(config, "start")
     assert captured["command"] == [
-        "systemctl", "enable", "--now", "stemcraft-server@survival.service",
+        "systemctl", "start", "stemcraft-server@survival.service",
     ]
     assert "shell" not in captured["kwargs"]
 
 
-def test_systemctl_stop_disables_instance(monkeypatch):
+def test_systemctl_stop_does_not_disable_instance(monkeypatch):
     captured = {}
     monkeypatch.setattr(processes.subprocess, "run", lambda command, **kwargs: captured.update(command=command))
     config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
@@ -110,48 +120,103 @@ def test_systemctl_stop_disables_instance(monkeypatch):
     processes._systemctl(config, "stop")
 
     assert captured["command"] == [
-        "systemctl", "disable", "--now", "stemcraft-server@survival.service",
+        "systemctl", "stop", "stemcraft-server@survival.service",
     ]
 
 
-def test_systemd_stop_is_initiated_by_systemd_without_console_race(monkeypatch):
+def test_systemd_stop_sends_minecraft_command_and_waits_for_clean_exit(monkeypatch):
     config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
     actions = []
     monkeypatch.setattr(processes, "_systemd_config", lambda _server_id: config)
-    monkeypatch.setattr(processes, "_systemd_status", lambda _config: {"running": True})
+    statuses = iter([{"running": True}, {"running": True}, {"running": False}])
+    monkeypatch.setattr(processes, "_systemd_status", lambda _config: next(statuses))
     monkeypatch.setattr(processes, "_systemctl", lambda _config, action: actions.append(action))
-    monkeypatch.setattr(
-        processes, "send_command",
-        lambda *_args: pytest.fail("console stop must not precede systemctl stop"),
-    )
+    monkeypatch.setattr(processes, "send_command", lambda _server_id, command: actions.append(command))
+    monkeypatch.setattr(processes.time, "sleep", lambda _seconds: None)
 
     processes.stop_server(1)
 
     assert actions == ["stop"]
 
 
+def test_systemd_stop_falls_back_when_console_socket_is_unavailable(monkeypatch):
+    config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
+    actions = []
+    monkeypatch.setattr(processes, "_systemd_config", lambda _server_id: config)
+    monkeypatch.setattr(processes, "_systemd_status", lambda _config: {"running": True})
+    monkeypatch.setattr(
+        processes, "send_command", lambda *_args: (_ for _ in ()).throw(RuntimeError("socket unavailable")),
+    )
+    monkeypatch.setattr(processes, "_systemctl", lambda _config, action: actions.append(action))
+
+    processes.stop_server(1)
+
+    assert actions == ["stop"]
+
+
+def test_stop_server_and_wait_waits_for_panel_owned_process(monkeypatch):
+    waited = []
+    process = SimpleNamespace(wait=lambda timeout: waited.append(timeout))
+    monkeypatch.setattr(processes, "_systemd_config", lambda _server_id: None)
+    monkeypatch.setitem(processes.processes, 1, process)
+    monkeypatch.setattr(processes, "stop_server", lambda _server_id: None)
+
+    processes.stop_server_and_wait(1)
+
+    assert waited == [30]
+
+
 def test_systemd_status_parses_properties_by_name(monkeypatch):
     config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
-    result = SimpleNamespace(
+    results = iter([
+        SimpleNamespace(
         returncode=0,
         # systemctl does not guarantee the order of selected properties.
         stdout="MainPID=4321\nActiveState=active\n",
-    )
-    monkeypatch.setattr(processes, "_systemctl", lambda *args, **kwargs: result)
+        ),
+        SimpleNamespace(returncode=0, stdout="enabled\n"),
+    ])
+    monkeypatch.setattr(processes, "_systemctl", lambda *args, **kwargs: next(results))
 
     status = processes._systemd_status(config)
 
-    assert status == {"running": True, "pid": 4321, "backend": "systemd"}
+    assert status == {
+        "running": True, "pid": 4321, "backend": "systemd",
+        "service_name": "survival",
+        "unit_name": "stemcraft-server@survival.service",
+        "enabled_at_boot": True,
+    }
 
 
 def test_systemd_status_treats_zero_pid_as_missing(monkeypatch):
     config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
-    result = SimpleNamespace(returncode=0, stdout="ActiveState=inactive\nMainPID=0\n")
-    monkeypatch.setattr(processes, "_systemctl", lambda *args, **kwargs: result)
+    results = iter([
+        SimpleNamespace(returncode=0, stdout="ActiveState=inactive\nMainPID=0\n"),
+        SimpleNamespace(returncode=1, stdout="disabled\n"),
+    ])
+    monkeypatch.setattr(processes, "_systemctl", lambda *args, **kwargs: next(results))
 
     status = processes._systemd_status(config)
 
-    assert status == {"running": False, "pid": None, "backend": "systemd"}
+    assert status == {
+        "running": False, "pid": None, "backend": "systemd",
+        "service_name": "survival",
+        "unit_name": "stemcraft-server@survival.service",
+        "enabled_at_boot": False,
+    }
+
+
+def test_set_systemd_enabled_changes_boot_policy_without_runtime_action(monkeypatch):
+    config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
+    actions = []
+    monkeypatch.setattr(processes, "systemd_available", lambda: True)
+    monkeypatch.setattr(processes, "_systemd_config", lambda _server_id: config)
+    monkeypatch.setattr(processes, "_systemctl", lambda _config, action: actions.append(action))
+
+    processes.set_systemd_enabled(1, True)
+    processes.set_systemd_enabled(1, False)
+
+    assert actions == ["enable", "disable"]
 
 
 def test_systemd_console_wait_reads_messages_after_journal_cursor(monkeypatch):

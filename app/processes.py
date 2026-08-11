@@ -1,9 +1,11 @@
 import subprocess
 import os
+import shutil
 import socket
 import json
 import re
 import shlex
+import sys
 import threading
 import time
 import psutil
@@ -48,6 +50,14 @@ unsupported_player_query_sockets: dict[int, tuple[int, int]] = {}
 player_query_lock = threading.Lock()
 
 
+def systemd_available() -> bool:
+    return (
+        sys.platform.startswith("linux")
+        and shutil.which("systemctl") is not None
+        and Path("/run/systemd/system").is_dir()
+    )
+
+
 def register_server(server) -> None:
     backend = getattr(server, "process_backend", "subprocess") or "subprocess"
     if backend not in {"subprocess", "systemd"}:
@@ -79,29 +89,34 @@ def _systemd_config(server_id: int) -> ServerProcessConfig | None:
 
 
 def _systemctl(config: ServerProcessConfig, action: str, check: bool = True):
-    if action not in {"start", "stop", "restart", "show"}:
+    if action not in {
+        "start", "stop", "restart", "show", "enable", "disable", "is-enabled",
+    }:
         raise ValueError("Invalid systemctl action")
     unit = f"{SYSTEMD_UNIT_PREFIX}{config.service_name}.service"
-    # A systemd-backed server is expected to survive panel and host restarts.
-    # Keep the unit-file state in sync with the panel lifecycle controls instead
-    # of leaving a successfully started instance reported as "disabled".
-    systemd_action = {
-        "start": "enable",
-        "stop": "disable",
-    }.get(action, action)
-    command = ["systemctl", systemd_action]
-    if action in {"start", "stop"}:
-        command.append("--now")
-    command.append(unit)
+    command = ["systemctl", action, unit]
     if action == "show":
         command.extend(["--property=ActiveState", "--property=MainPID"])
-    return subprocess.run(command, capture_output=True, text=True, timeout=30, check=check)
+    try:
+        return subprocess.run(
+            command, capture_output=True, text=True, timeout=30, check=check,
+        )
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or error.stdout or "systemctl command failed").strip()
+        raise RuntimeError(detail) from error
 
 
 def _systemd_status(config: ServerProcessConfig) -> dict:
     result = _systemctl(config, "show", check=False)
     if result.returncode != 0:
-        return {"running": False, "pid": None, "backend": "systemd"}
+        return {
+            "running": False,
+            "pid": None,
+            "backend": "systemd",
+            "service_name": config.service_name,
+            "unit_name": f"{SYSTEMD_UNIT_PREFIX}{config.service_name}.service",
+            "enabled_at_boot": None,
+        }
     properties = {}
     for line in result.stdout.splitlines():
         key, separator, value = line.partition("=")
@@ -114,7 +129,25 @@ def _systemd_status(config: ServerProcessConfig) -> dict:
         pid = pid_value or None
     except ValueError:
         pid = None
-    return {"running": active in {"active", "activating"}, "pid": pid, "backend": "systemd"}
+    enabled_result = _systemctl(config, "is-enabled", check=False)
+    enabled = enabled_result.returncode == 0
+    return {
+        "running": active in {"active", "activating"},
+        "pid": pid,
+        "backend": "systemd",
+        "service_name": config.service_name,
+        "unit_name": f"{SYSTEMD_UNIT_PREFIX}{config.service_name}.service",
+        "enabled_at_boot": enabled,
+    }
+
+
+def set_systemd_enabled(server_id: int, enabled: bool) -> None:
+    if not systemd_available():
+        raise RuntimeError("Systemd services are only available on Linux hosts running systemd")
+    config = _systemd_config(server_id)
+    if not config:
+        raise RuntimeError("Automatic startup is only available for systemd services")
+    _systemctl(config, "enable" if enabled else "disable")
 
 
 MAX_CONSOLE_LINES = 1000
@@ -343,11 +376,24 @@ def stop_server(
     if config:
         if not _systemd_status(config)["running"]:
             raise RuntimeError("Server is not running")
-        # Let systemd initiate the shutdown. SIGTERM is translated by the
-        # supervisor into Minecraft's graceful `stop` command. Sending the
-        # console command first creates a race where the process can fail and
-        # Restart=on-failure can schedule a restart before systemd receives the
-        # explicit stop request.
+        try:
+            # Ask Minecraft itself to save and shut down. The supervisor stays
+            # alive until Java exits, so a successful exit leaves systemd with
+            # a clean result and does not trigger Restart=on-failure.
+            send_command(server_id, "stop")
+        except RuntimeError:
+            # Older/unavailable supervisor sockets still have the unit signal
+            # path as a bounded fallback.
+            _systemctl(config, "stop")
+            return
+
+        deadline = time.monotonic() + 85
+        while time.monotonic() < deadline:
+            if not _systemd_status(config)["running"]:
+                return
+            time.sleep(0.25)
+
+        # Preserve systemd's final timeout/kill handling for a hung server.
         _systemctl(config, "stop")
         return
     process = processes.get(
@@ -378,6 +424,19 @@ def stop_server(
     )
 
     process.stdin.flush()
+
+
+def stop_server_and_wait(server_id: int, timeout: float = 30) -> None:
+    config = _systemd_config(server_id)
+    process = processes.get(server_id)
+    stop_server(server_id)
+    if config or not process:
+        return
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
 
 
 def restart_server(

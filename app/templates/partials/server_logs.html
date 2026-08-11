@@ -1,0 +1,46 @@
+<div class="server-logs-page" data-page-title="Logs" data-server-id="{{ server.id }}" data-logs-page="{{ logs_page }}" data-selected-log="{{ selected_log or '' }}">
+    <section class="overview-card server-log-list">
+        <div class="card-header">
+            <span>Server Logs</span>
+            <span id="server-log-count" class="plugin-count">{{ total_logs }} files</span>
+        </div>
+
+        <div id="server-log-rows">
+        {% for log in logs %}
+        <a class="server-log-row{% if log.name == selected_log %} active{% endif %}"
+           href="/servers/{{ server.id }}/logs?file={{ log.name|urlencode }}"
+           hx-get="/servers/{{ server.id }}/logs?file={{ log.name|urlencode }}"
+           hx-target="#page-content" hx-push-url="true">
+            <span class="server-log-name"><i class="fa-regular fa-file-lines"></i>{{ log.name }}</span>
+            <span>{{ log.modified.strftime("%Y-%m-%d %H:%M:%S") }}</span>
+            <span>{{ log.size_display }}</span>
+        </a>
+        {% else %}
+        <div class="empty-message">No Minecraft log files were found in this server's <code>logs</code> directory.</div>
+        {% endfor %}
+        </div>
+
+        <div id="server-log-pagination" class="server-log-pagination" {% if logs_total_pages <= 1 %}hidden{% endif %}>
+            <a class="button" data-log-page="previous" href="/servers/{{ server.id }}/logs?page={{ logs_page - 1 }}{% if selected_log %}&file={{ selected_log|urlencode }}{% endif %}" hx-get="/servers/{{ server.id }}/logs?page={{ logs_page - 1 }}{% if selected_log %}&file={{ selected_log|urlencode }}{% endif %}" hx-target="#page-content" hx-push-url="true" {% if logs_page <= 1 %}aria-disabled="true"{% endif %}>Previous</a>
+            <span id="server-log-page-label">Page {{ logs_page }} of {{ logs_total_pages }}</span>
+            <a class="button" data-log-page="next" href="/servers/{{ server.id }}/logs?page={{ logs_page + 1 }}{% if selected_log %}&file={{ selected_log|urlencode }}{% endif %}" hx-get="/servers/{{ server.id }}/logs?page={{ logs_page + 1 }}{% if selected_log %}&file={{ selected_log|urlencode }}{% endif %}" hx-target="#page-content" hx-push-url="true" {% if logs_page >= logs_total_pages %}aria-disabled="true"{% endif %}>Next</a>
+        </div>
+    </section>
+
+    {% if selected_log %}
+    <section class="overview-card server-log-viewer">
+        <div class="card-header">
+            <span>{{ selected_log }}</span>
+            <a class="button" href="/servers/{{ server.id }}/logs/download?file={{ selected_log|urlencode }}">
+                <i class="fa-solid fa-download"></i> Download
+            </a>
+        </div>
+        <div id="server-log-truncated-notice" class="plugin-restart-alert server-log-notice" {% if not log_truncated %}hidden{% endif %}>
+            <div><i class="fa-solid fa-circle-info"></i><span>The preview is limited to 5 MB. Download the file to view the complete log.</span></div>
+        </div>
+        <pre class="server-log-content"
+             data-server-id="{{ server.id }}"
+             data-live="{{ 'true' if selected_log == 'latest.log' else 'false' }}">{{ log_content }}</pre>
+    </section>
+    {% endif %}
+</div>

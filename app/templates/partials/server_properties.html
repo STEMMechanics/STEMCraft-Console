@@ -13,7 +13,7 @@
             </div>
             <label class="property-field"><span>Minecraft version</span><select id="paper-version-select" onchange="loadPaperBuilds(this.value)"><option>Loading versions...</option></select></label>
             <label class="property-field"><span>Paper build</span><select id="paper-build-select"><option>Loading builds...</option></select></label>
-            <button id="paper-update-button" class="button start is-unavailable" onclick="installPaperVersion()" type="button" aria-disabled="true" data-unavailable-reason="Checking server status...">Download and replace JAR</button>
+            <button id="paper-update-button" class="button success is-unavailable" onclick="installPaperVersion()" type="button" aria-disabled="true" data-unavailable-reason="Checking server status...">Download and replace JAR</button>
         </div>
         <p id="paper-update-message" class="paper-update-message muted-small"></p>
     </section>
@@ -43,6 +43,51 @@
         id="properties-form"
         onsubmit="saveServerProperties(event)"
     >
+
+        <section class="overview-card property-section">
+
+            <div class="card-header">
+                Process Management
+            </div>
+
+            <div id="property-systemd-unavailable" class="plugin-restart-alert process-management-notice" hidden>
+                <div>
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>Only panel-owned process mode is supported on this host.</span>
+                </div>
+            </div>
+
+            <div class="property-grid">
+
+                <label class="property-field">
+                    <span>Management mode</span>
+                    <select id="property-process-backend" name="process_backend" onchange="updateProcessManagementFields()">
+                        <option value="systemd">Systemd service</option>
+                        <option value="subprocess">Panel-owned process</option>
+                    </select>
+                    <small>Changing modes requires the server to be stopped.</small>
+                </label>
+
+                <div id="property-systemd-service" class="property-field">
+                    <span>Service</span>
+                    <code id="property-service-name">—</code>
+                    <small id="property-service-state">Checking service state...</small>
+                </div>
+
+                <label id="property-systemd-enabled-row" class="property-toggle full-width">
+                    <div>
+                        <strong>Start automatically at boot</strong>
+                        <small>Enable the systemd service without starting or stopping it now.</small>
+                    </div>
+                    <span class="switch">
+                        <input id="property-systemd-enabled" type="checkbox">
+                        <span class="switch-slider"></span>
+                    </span>
+                </label>
+
+            </div>
+
+        </section>
 
         <section class="overview-card property-section">
 
@@ -538,6 +583,18 @@
         </div>
 
     </form>
+
+    <div id="properties-restart-modal" class="modal-backdrop" hidden>
+        <div class="modal-card">
+            <h2>Restart server to apply changes?</h2>
+            <p>This server is currently running. Continuing will stop it, apply the property and process-management changes, then start it again.</p>
+            <p class="modal-note">Players will be disconnected while the server restarts.</p>
+            <div class="modal-actions">
+                <button class="button" type="button" onclick="closePropertiesRestartModal()">Cancel</button>
+                <button id="confirm-properties-restart" class="button restart" type="button" onclick="confirmPropertiesRestart()">Stop, save and restart</button>
+            </div>
+        </div>
+    </div>
 
     {% if user.can("servers.delete") %}
     <div id="delete-server-modal" class="modal-backdrop" hidden>
