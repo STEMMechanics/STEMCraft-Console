@@ -289,10 +289,13 @@ async def plugin_action(
 
     data = await request.json()
 
-    filename = data.get(
-        "filename",
-        "",
-    )
+    filename = data.get("filename", "")
+    filenames = data.get("filenames")
+    if filenames is None:
+        filenames = [filename]
+    if not isinstance(filenames, list) or not filenames or not all(isinstance(item, str) for item in filenames):
+        return JSONResponse({"error": "Select valid plugin files"}, status_code=400)
+    filenames = list(dict.fromkeys(filenames))
 
     action = data.get(
         "action",
@@ -303,30 +306,18 @@ async def plugin_action(
     try:
 
         if action == "enable":
-
-            enable_plugin(
-                server,
-                filename,
-            )
+            for filename in filenames:
+                enable_plugin(server, filename)
 
         elif action == "disable":
 
-            disable_plugin(
-                server,
-                filename,
-            )
+            for filename in filenames:
+                disable_plugin(server, filename)
 
         elif action == "remove":
 
-            remove_plugin(
-                server,
-                filename,
-                bool(
-                    data.get(
-                        "remove_config"
-                    )
-                ),
-            )
+            for filename in filenames:
+                remove_plugin(server, filename, bool(data.get("remove_config")))
 
         else:
 
@@ -355,4 +346,5 @@ async def plugin_action(
     return {
         "success": True,
         "restart_required": True,
+        "affected": len(filenames),
     }

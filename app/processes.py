@@ -439,6 +439,17 @@ def stop_server(
     process.stdin.flush()
 
 
+def run_pre_stop_commands(server_id: int, commands: str) -> None:
+    lines = [line.strip() for line in (commands or "").splitlines() if line.strip()]
+    if len(lines) > 20:
+        raise ValueError("No more than 20 pre-stop commands are allowed")
+    for command in lines:
+        if len(command) > 500 or command.casefold() == "stop":
+            raise ValueError("Pre-stop commands must be under 500 characters and cannot be stop")
+        send_command(server_id, command)
+        time.sleep(0.25)
+
+
 def stop_server_and_wait(server_id: int, timeout: float = 30) -> None:
     config = _systemd_config(server_id)
     process = processes.get(server_id)
@@ -463,7 +474,10 @@ def restart_server(
 ):
     config = _systemd_config(server_id)
     if config:
-        _systemctl(config, "restart")
+        # Use Minecraft's own stop command and wait for a clean exit before
+        # asking systemd to start it again.
+        stop_server(server_id)
+        _systemctl(config, "start")
         return _systemd_status(config).get("pid")
     process = processes.get(
         server_id

@@ -208,6 +208,10 @@ class Server(Base):
         String(1000), nullable=False, default=""
     )
 
+    stop_commands = Column(
+        Text, nullable=False, default=""
+    )
+
     java_path = Column(
         String(500), nullable=False, default="java"
     )

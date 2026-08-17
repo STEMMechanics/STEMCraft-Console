@@ -131,14 +131,10 @@
 
             <div class="file-actions">
 
-                {% if not entry.is_dir %}
-
                 <a class="file-action-button" href="/servers/{{ server.id }}/files/download?path={{ entry.path }}"
-                    title="Download">
+                    title="Download{{ ' folder as ZIP' if entry.is_dir else '' }}">
                     <i class="fa-solid fa-download"></i>
                 </a>
-
-                {% endif %}
 
 
                 {% if user.can("files.manage") %}<button class="file-action-button" onclick="openRenameModal(

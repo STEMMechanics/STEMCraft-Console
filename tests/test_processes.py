@@ -202,6 +202,15 @@ def test_stop_server_and_wait_waits_for_panel_owned_process(monkeypatch):
     assert waited == [30]
 
 
+def test_pre_stop_commands_are_sent_in_order(monkeypatch):
+    sent = []
+    monkeypatch.setattr(processes, "send_command", lambda server_id, command: sent.append((server_id, command)))
+    monkeypatch.setattr(processes.time, "sleep", lambda _seconds: None)
+
+    processes.run_pre_stop_commands(7, "citizens save\n\nstemcraft save\nsave-all")
+
+    assert sent == [(7, "citizens save"), (7, "stemcraft save"), (7, "save-all")]
+
 def test_systemd_status_parses_properties_by_name(monkeypatch):
     config = processes.ServerProcessConfig("systemd", "survival", "/srv/server", "2G", "paper.jar", "")
     results = iter([

@@ -405,6 +405,34 @@
     </section>
 
 
+    <section class="overview-card settings-section">
+        <div class="card-header">System Alert Emails</div>
+        <div class="settings-content">
+            <label class="property-field full-width settings-toggle-field">
+                <input id="system-alerts-enabled" type="checkbox">
+                <span>Email administrators when system usage crosses a threshold</span>
+            </label>
+            <label class="property-field">
+                <span>Memory threshold (%)</span>
+                <input id="system-alert-memory" type="number" min="1" max="100" value="95">
+            </label>
+            <label class="property-field">
+                <span>Storage threshold (%)</span>
+                <input id="system-alert-storage" type="number" min="1" max="100" value="80">
+            </label>
+            <label class="property-field">
+                <span>Cooldown (minutes)</span>
+                <input id="system-alert-cooldown" type="number" min="1" max="10080" value="60">
+            </label>
+            <p class="modal-note full-width">Alerts are sent to enabled administrators with an email address. SMTP must be configured above.</p>
+            <div class="settings-save-row">
+                <span id="system-alert-save-status" class="muted-small"></span>
+                <button class="button" type="button" onclick="saveSystemAlertSettings()">Save Alerts</button>
+            </div>
+        </div>
+    </section>
+
+
     {% endif %}
 
     {% if user.can("system.view") or user.can("system.manage") %}

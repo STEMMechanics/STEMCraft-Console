@@ -231,6 +231,7 @@ def properties_data(
             "max_memory": server.memory,
             "jar_name": server.jar_name,
             "java_args": server.java_args,
+            "stop_commands": server.stop_commands,
             "java_major": selected_runtime["major"] if selected_runtime else None,
             "java_runtimes": java_runtime_choices(runtimes),
             "jar_files": sorted(jar_files),
@@ -534,6 +535,7 @@ async def save_properties_api(
         )
         jar_name = str(data.pop("jar_name", server.jar_name)).strip()
         java_args = str(data.pop("java_args", server.java_args)).strip()
+        stop_commands = str(data.pop("stop_commands", server.stop_commands)).strip()
         try:
             java_major = int(data.pop("java_major"))
         except (KeyError, TypeError, ValueError) as error:
@@ -556,9 +558,14 @@ async def save_properties_api(
         if len(java_args) > 1000:
             raise ValueError("Java startup options cannot exceed 1000 characters")
         build_java_command(max_memory, jar_name, java_args, min_memory, java_path)
+        if len(stop_commands) > 4000 or len([line for line in stop_commands.splitlines() if line.strip()]) > 20:
+            error_field = "stop_commands"
+            raise ValueError("Use no more than 20 pre-stop commands and 4000 characters")
 
         if current_status.get("running"):
             error_field = None
+            from .processes import run_pre_stop_commands
+            run_pre_stop_commands(server.id, stop_commands)
             stop_server_and_wait(server.id)
             stopped_for_save = True
 
@@ -572,6 +579,7 @@ async def save_properties_api(
         server.memory = max_memory
         server.jar_name = jar_name
         server.java_args = java_args
+        server.stop_commands = stop_commands
         server.java_path = java_path
         server.process_backend = process_backend
 

@@ -72,7 +72,7 @@
             id="backup-list"
             class="backup-list"
         >
-            Loading backups...
+            <div class="empty-message">Loading backups...</div>
         </div>
 
     </section>
@@ -136,6 +136,10 @@
             </p>
 
             <div class="modal-actions">
+
+                <button class="button danger" onclick="cancelActiveBackup()">
+                    Cancel backup
+                </button>
 
                 <button class="button" onclick="closeCreateBackupModal()">
                     Hide

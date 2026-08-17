@@ -165,6 +165,7 @@ def create_backup(
     destination = (
         backups / filename
     )
+    temporary = destination.with_suffix(".zip.part")
 
 
     files = []
@@ -205,63 +206,52 @@ def create_backup(
     last_progress = -1
 
 
-    with zipfile.ZipFile(
-        destination,
-        "w",
-        compression=zipfile.ZIP_DEFLATED,
-        compresslevel=6,
-    ) as archive:
+    try:
+        with zipfile.ZipFile(
+            temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6,
+        ) as archive:
 
-        for path in files:
+            for path in files:
 
-            try:
+                try:
 
-                size = (
-                    path.stat().st_size
-                )
+                    size = path.stat().st_size
 
-                archive.write(
-                    path,
-                    path.relative_to(root),
-                )
+                    archive.write(path, path.relative_to(root))
 
-                processed_bytes += size
+                    processed_bytes += size
 
 
-            except (
-                FileNotFoundError,
-                PermissionError,
-                OSError,
-            ):
-                # A file may disappear while
-                # the server is running.
-                continue
+                except (FileNotFoundError, PermissionError):
+                    continue
 
 
-            if progress_callback:
+                if progress_callback:
 
-                if total_bytes > 0:
+                    if total_bytes > 0:
 
-                    progress = int(
-                        processed_bytes
-                        / total_bytes
-                        * 100
-                    )
+                        progress = int(processed_bytes / total_bytes * 100)
 
-                else:
+                    else:
 
-                    progress = 100
+                        progress = 100
 
 
                 # Don't hammer SQLite with
                 # identical progress updates.
-                if progress != last_progress:
+                    if progress != last_progress:
 
-                    progress_callback(
-                        progress
-                    )
+                        progress_callback(progress)
 
-                    last_progress = progress
+                        last_progress = progress
+
+        temporary.replace(destination)
+    except Exception:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
     if progress_callback:

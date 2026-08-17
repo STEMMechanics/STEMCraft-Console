@@ -145,6 +145,12 @@
                     <small>The executable used for this server, including systemd-backed instances.</small>
                 </label>
 
+                <label class="property-field full-width">
+                    <span>Commands before stop or restart</span>
+                    <textarea id="property-stop-commands" rows="4" placeholder="citizens save&#10;stemcraft save&#10;save-all"></textarea>
+                    <small>One console command per line. These run in order before the panel sends <code>stop</code>.</small>
+                </label>
+
                 <div class="property-field full-width startup-command-preview">
                     <span>Effective startup command</span>
                     <code id="startup-command-preview">java -Xms2G -Xmx2G -jar paper.jar --nogui</code>

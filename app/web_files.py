@@ -1,4 +1,8 @@
 from pathlib import Path
+import tempfile
+import zipfile
+from urllib.parse import quote
+from starlette.background import BackgroundTask
 
 from .file_manager import (
     create_folder,
@@ -244,17 +248,36 @@ def download_file(
         path,
     )
 
-    if not target.is_file():
+    if not target.is_file() and not target.is_dir():
 
         raise HTTPException(
             status_code=404,
-            detail="File not found",
+            detail="File or folder not found",
         )
 
 
+    if target.is_file():
+        return FileResponse(target, filename=target.name)
+
+    temporary = tempfile.NamedTemporaryFile(
+        prefix="stemcraft-folder-", suffix=".zip", delete=False,
+    )
+    temporary.close()
+    archive_path = Path(temporary.name)
+    try:
+        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            for item in target.rglob("*"):
+                if item.is_symlink() or not item.is_file():
+                    continue
+                archive.write(item, item.relative_to(target.parent))
+    except Exception:
+        archive_path.unlink(missing_ok=True)
+        raise
     return FileResponse(
-        target,
-        filename=target.name,
+        archive_path,
+        filename=f"{target.name}.zip",
+        media_type="application/zip",
+        background=BackgroundTask(archive_path.unlink, missing_ok=True),
     )
 
 
@@ -318,6 +341,7 @@ def edit_file_page(
         "filename":
             Path(path).name,
         "contents": contents,
+        "parent_path": "" if str(Path(path).parent) == "." else str(Path(path).parent),
     })
 
 
@@ -338,6 +362,7 @@ def save_file(
 
     path: str = Form(),
     contents: str = Form(),
+    close: bool = Form(default=False),
 
     db: Session = Depends(get_db),
 ):
@@ -376,13 +401,12 @@ def save_file(
         parent = ""
 
 
-    return RedirectResponse(
-        (
-            f"/servers/{server_id}/files"
-            f"?path={parent}"
-        ),
-        status_code=303,
+    destination = (
+        f"/servers/{server_id}/files?path={quote(parent)}"
+        if close else
+        f"/servers/{server_id}/files/edit?path={quote(path)}&saved=true"
     )
+    return RedirectResponse(destination, status_code=303)
 
 
 @router.post(

@@ -589,6 +589,7 @@ let lastConsoleSignature = "";
 let playerData = null;
 let playerFilter = "all";
 let pluginData = [];
+let selectedPluginFilenames = new Set();
 let pluginPendingRemoval = null;
 let pluginPendingReplacement = null;
 let pluginRestartRequired = false;
@@ -1131,6 +1132,11 @@ function renderPlugins() {
                     ${duplicatePluginFilenames.has(plugin.filename) ? "duplicate" : ""}
                 ">
 
+                    ${document.querySelector('.plugins-page')?.dataset.canManage === "true" ? `
+                      <label class="plugin-select"><input type="checkbox" aria-label="Select ${escapeHtml(plugin.name)}"
+                        ${selectedPluginFilenames.has(plugin.filename) ? "checked" : ""}
+                        onchange="selectPlugin('${escapeJs(plugin.filename)}', this.checked)"></label>` : ""}
+
                     <div class="plugin-main">
 
                         <strong>
@@ -1209,6 +1215,28 @@ function renderPlugins() {
             `,
   )
     .join("");
+}
+
+function selectPlugin(filename, selected) {
+  selected ? selectedPluginFilenames.add(filename) : selectedPluginFilenames.delete(filename);
+  const count = document.getElementById("plugin-selected-count");
+  if (count) count.textContent = `${selectedPluginFilenames.size} selected`;
+}
+
+async function bulkPluginAction(action) {
+  const filenames = Array.from(selectedPluginFilenames);
+  const page = document.querySelector(".plugins-page");
+  if (!page || !filenames.length) return;
+  if (action === "remove" && !confirm(`Delete ${filenames.length} selected plugin file(s)?`)) return;
+  const response = await fetch(`/api/web/servers/${page.dataset.serverId}/plugins/action`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, filenames }),
+  });
+  const data = await response.json();
+  if (!response.ok) return showToast(data.error || "Plugin action failed", "error");
+  selectedPluginFilenames.clear();
+  await updatePluginsPage();
+  showToast(`${data.affected} plugin file(s) updated.`, "success");
 }
 
 function renderPluginConfigActions(plugin, index) {
@@ -1362,7 +1390,25 @@ function showPluginDuplicatesModal() {
       state.className = "plugin-duplicate-state";
       state.textContent = "Enabled";
       description.appendChild(state);
-      label.append(checkbox, description);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "plugin-duplicate-delete";
+      remove.textContent = "Delete file";
+      remove.addEventListener("click", async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!confirm(`Permanently delete ${plugin.filename}?`)) return;
+        const page = document.querySelector(".plugins-page");
+        const response = await fetch(`/api/web/servers/${page.dataset.serverId}/plugins/action`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "remove", filename: plugin.filename }),
+        });
+        const data = await response.json();
+        if (!response.ok) return showToast(data.error || "Unable to delete plugin", "error");
+        latestInstalledPluginFilename = null;
+        await updatePluginsPage(true);
+      });
+      label.append(checkbox, description, remove);
       section.appendChild(label);
     }
     container.appendChild(section);
@@ -3458,6 +3504,7 @@ async function updatePropertiesPage() {
     setValue("property-max-memory", startup.max_memory || "2G");
     setValue("property-jar-name", startup.jar_name || "paper.jar");
     setValue("property-java-args", startup.java_args || "");
+    setValue("property-stop-commands", startup.stop_commands || "");
     const javaSelect = document.getElementById("property-java-path");
     if (javaSelect) {
       javaSelect.replaceChildren(...(startup.java_runtimes || []).map((runtime) => {
@@ -3761,6 +3808,8 @@ async function saveServerProperties(
     jar_name: valueOf("property-jar-name"),
 
     java_args: valueOf("property-java-args"),
+
+    stop_commands: valueOf("property-stop-commands"),
 
     java_major: numberOf("property-java-path"),
 
@@ -5280,6 +5329,39 @@ async function disableTFA() {
 
 updateTFASettings();
 
+async function loadSystemAlertSettings() {
+  if (!document.getElementById("system-alerts-enabled")) return;
+  try {
+    const response = await fetch("/api/web/settings/system-alerts");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to load alerts");
+    setChecked("system-alerts-enabled", data.enabled);
+    setValue("system-alert-memory", data.memory_percent);
+    setValue("system-alert-storage", data.storage_percent);
+    setValue("system-alert-cooldown", data.cooldown_minutes);
+  } catch (error) {
+    document.getElementById("system-alert-save-status").textContent = error.message;
+  }
+}
+
+async function saveSystemAlertSettings() {
+  const status = document.getElementById("system-alert-save-status");
+  const response = await fetch("/api/web/settings/system-alerts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      enabled: checkedOf("system-alerts-enabled"),
+      memory_percent: numberOf("system-alert-memory"),
+      storage_percent: numberOf("system-alert-storage"),
+      cooldown_minutes: numberOf("system-alert-cooldown"),
+    }),
+  });
+  const data = await response.json();
+  status.textContent = response.ok ? "Saved" : (data.error || "Unable to save alerts");
+}
+
+loadSystemAlertSettings();
+
 async function updateBackupJobs() {
   const page = document.querySelector(
     ".backups-page",
@@ -5386,10 +5468,32 @@ function renderBackupJobs(
 
                     </div>
 
+                    ${document.querySelector('.backups-page')?.dataset.canManage === "true" ? `
+                      <div class="backup-job-actions">
+                        <button class="button danger" onclick="cancelBackup(${job.id})">Cancel backup</button>
+                      </div>` : ""}
+
                 </div>
             `,
   )
     .join("");
+}
+
+async function cancelBackup(jobId) {
+  const page = document.querySelector(".backups-page");
+  if (!page || !confirm("Cancel this backup? The incomplete archive will be removed.")) return;
+  const response = await fetch(
+    `/api/web/servers/${page.dataset.serverId}/backups/jobs/${jobId}/cancel`,
+    { method: "POST" },
+  );
+  const data = await response.json();
+  if (!response.ok) return showToast(data.error || "Unable to cancel backup", "error");
+  showToast("Backup cancellation requested.", "warning");
+  updateBackupJobs();
+}
+
+function cancelActiveBackup() {
+  if (activeBackupJobId) cancelBackup(activeBackupJobId);
 }
 
 function updateBackupModalProgress(
@@ -5438,6 +5542,10 @@ setInterval(
   updateBackupJobs,
   1500,
 );
+
+// Refresh the directory-backed list too, so a page left open across a console
+// restart repopulates when the service returns.
+setInterval(updateBackupsPage, 10000);
 
 updateBackupJobs();
 
