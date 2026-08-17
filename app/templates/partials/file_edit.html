@@ -16,7 +16,7 @@
 
 
         <a
-            href="/servers/{{ server.id }}/files"
+            href="/servers/{{ server.id }}/files?path={{ parent_path }}"
             class="button"
         >
             Back to Files
@@ -45,8 +45,12 @@
 
         <div class="file-editor-actions">
 
-            <button class="button" type="submit">
-                Save File
+            <button class="button" type="submit" name="close" value="false">
+                Save
+            </button>
+
+            <button class="button" type="submit" name="close" value="true">
+                Save and Close
             </button>
 
         </div>

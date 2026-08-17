@@ -13,6 +13,7 @@ from .database import (
 from .models import (
     BackupJob,
     Server,
+    TaskRun,
 )
 
 from .processes import (
@@ -21,6 +22,43 @@ from .processes import (
     server_status,
     wait_for_console_message,
 )
+
+
+class BackupCancelled(Exception):
+    pass
+
+
+_cancel_events: dict[int, threading.Event] = {}
+_cancel_lock = threading.Lock()
+
+
+def request_backup_cancellation(job_id: int) -> bool:
+    with _cancel_lock:
+        event = _cancel_events.get(job_id)
+        if not event:
+            return False
+        event.set()
+        return True
+
+
+def fail_abandoned_backup_jobs(db) -> int:
+    now = datetime.utcnow()
+    message = "Backup interrupted because the console service restarted"
+    jobs = db.query(BackupJob).filter(BackupJob.status.in_([
+        "queued", "saving", "archiving", "uploading",
+    ])).all()
+    for job in jobs:
+        job.status = "failed"
+        job.message = message
+        job.finished_at = now
+    for run in db.query(TaskRun).filter(
+        TaskRun.task_type == "backup", TaskRun.status == "running",
+    ).all():
+        run.status = "failed"
+        run.detail = message
+        run.finished_at = now
+    db.commit()
+    return len(jobs)
 
 
 def start_backup_job(
@@ -45,6 +83,9 @@ def run_backup_job(
 
     running = False
     saves_disabled = False
+    cancel_event = threading.Event()
+    with _cancel_lock:
+        _cancel_events[job_id] = cancel_event
 
     try:
 
@@ -150,6 +191,9 @@ def run_backup_job(
             value: int,
         ):
 
+            if cancel_event.is_set():
+                raise BackupCancelled("Backup cancelled by an administrator")
+
             # Refresh in case another
             # session modified the row.
             current_job = db.get(
@@ -224,7 +268,7 @@ def run_backup_job(
 
         if job:
 
-            job.status = "failed"
+            job.status = "cancelled" if isinstance(error, BackupCancelled) else "failed"
 
             job.message = (
                 str(error)
@@ -238,6 +282,9 @@ def run_backup_job(
 
 
     finally:
+
+        with _cancel_lock:
+            _cancel_events.pop(job_id, None)
 
         if (
             running

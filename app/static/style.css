@@ -2705,6 +2705,35 @@ input[type="checkbox"] {
   overflow: hidden;
 }
 
+.plugin-bulk-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.plugin-select {
+    display: grid;
+    place-items: center;
+    padding: 0.75rem 0 0.75rem 0.9rem;
+}
+
+.plugin-duplicate-delete {
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    color: #ef4444;
+    cursor: pointer;
+    font-size: 0.8rem;
+    text-decoration: underline;
+}
+
+.backup-job-actions {
+    margin-top: 0.75rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
 .settings-content {
   display: grid;
   grid-template-columns:

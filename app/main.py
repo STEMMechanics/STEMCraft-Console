@@ -75,6 +75,7 @@ from .web_settings import (
 from .web_roles import router as web_roles_router
 from .web_automation import router as web_automation_router
 from .automation import start_automation, stop_automation
+from .backup_jobs import fail_abandoned_backup_jobs
 
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -219,6 +220,7 @@ def startup():
     try:
         from .models import Server
         from .java_runtime import discover_java_runtimes, select_java_runtime
+        fail_abandoned_backup_jobs(db)
         servers = db.query(Server).all()
         runtimes = discover_java_runtimes()
         for server in servers:

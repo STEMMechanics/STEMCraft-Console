@@ -17,6 +17,7 @@ from .player_manager import get_online_players
 from .processes import register_server, send_command, server_process_stats, server_status
 from .config import SCHEDULE_TIMEZONE
 from .offsite_backups import OffsiteBackupError, enforce_remote_retention, upload_backup
+from .system_alerts import check_system_alerts
 
 
 _stop = threading.Event()
@@ -298,6 +299,7 @@ def collect_metrics() -> None:
         cutoff = now - timedelta(days=METRIC_RETENTION_DAYS)
         db.query(ServerMetric).filter(ServerMetric.recorded_at < cutoff).delete(synchronize_session=False)
         db.commit()
+        check_system_alerts(db, now)
     finally:
         db.close()
 

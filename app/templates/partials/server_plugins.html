@@ -33,6 +33,15 @@
             placeholder="Search installed plugins..."
         >
 
+        {% if user.can("plugins.manage") %}
+        <div id="plugin-bulk-actions" class="plugin-bulk-actions">
+            <span id="plugin-selected-count">0 selected</span>
+            <button class="button" type="button" onclick="bulkPluginAction('enable')">Enable</button>
+            <button class="button" type="button" onclick="bulkPluginAction('disable')">Disable</button>
+            <button class="button danger" type="button" onclick="bulkPluginAction('remove')">Delete</button>
+        </div>
+        {% endif %}
+
     </div>
 
     {% if user.can("plugins.manage") %}
@@ -77,7 +86,7 @@
             id="plugin-list"
             class="plugin-list-page"
         >
-            Loading plugins...
+            <div class="empty-message">Loading plugins...</div>
         </div>
 
     </section>

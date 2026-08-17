@@ -43,6 +43,7 @@ from .paper import (
 from .processes import (
     get_console,
     restart_server,
+    run_pre_stop_commands,
     send_command,
     server_status,
     start_server,
@@ -1021,7 +1022,7 @@ def web_start_server(
         }
 
 
-    except RuntimeError as error:
+    except (RuntimeError, ValueError) as error:
 
         return JSONResponse(
             {
@@ -1084,6 +1085,8 @@ def web_stop_server(
 
     try:
 
+        run_pre_stop_commands(server.id, server.stop_commands)
+
         stop_server(
             server.id
         )
@@ -1093,7 +1096,7 @@ def web_stop_server(
         }
 
 
-    except RuntimeError as error:
+    except (RuntimeError, ValueError) as error:
 
         return JSONResponse(
             {
@@ -1144,6 +1147,8 @@ def web_restart_server(
 
 
     try:
+
+        run_pre_stop_commands(server.id, server.stop_commands)
 
         pid = restart_server(
             server.id,

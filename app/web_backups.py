@@ -34,7 +34,7 @@ from .web_servers import (
 )
 from .permissions import has_permission
 
-from .backup_jobs import start_backup_job
+from .backup_jobs import request_backup_cancellation, start_backup_job
 
 from .models import BackupJob
 
@@ -44,6 +44,25 @@ from .processes import (
     wait_for_console_message,
 )
 router = APIRouter()
+
+
+@router.post("/api/web/servers/{server_id}/backups/jobs/{job_id}/cancel")
+def cancel_backup_job(server_id: int, job_id: int, request: Request, db: Session = Depends(get_db)):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "backups.manage"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    job = db.get(BackupJob, job_id)
+    if not job or job.server_id != server.id:
+        return JSONResponse({"error": "Backup job not found"}, status_code=404)
+    if job.status not in {"queued", "saving", "archiving", "uploading"}:
+        return JSONResponse({"error": "Backup is no longer running"}, status_code=409)
+    if not request_backup_cancellation(job.id):
+        return JSONResponse({"error": "Backup worker is no longer available"}, status_code=409)
+    job.message = "Cancellation requested"
+    db.commit()
+    return {"success": True}
 
 
 @router.get(

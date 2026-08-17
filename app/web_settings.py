@@ -32,6 +32,8 @@ from .settings_manager import (
     get_smtp_settings,
     save_login_message,
     save_smtp_settings,
+    get_system_alert_settings,
+    save_system_alert_settings,
 )
 
 from .tfa import (
@@ -71,6 +73,29 @@ from .offsite_backups import (
 )
 
 router = APIRouter()
+
+
+@router.get("/api/web/settings/system-alerts")
+def system_alert_settings(request: Request, db: Session = Depends(get_db)):
+    admin = current_web_user(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not has_permission(admin, "settings.manage"):
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+    return get_system_alert_settings(db)
+
+
+@router.post("/api/web/settings/system-alerts")
+async def update_system_alert_settings(request: Request, db: Session = Depends(get_db)):
+    admin = current_web_user(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not has_permission(admin, "settings.manage"):
+        return JSONResponse({"error": "Admin required"}, status_code=403)
+    try:
+        return save_system_alert_settings(db, await request.json())
+    except (TypeError, ValueError) as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
 
 
 @router.get("/api/web/settings/offsite-backups")

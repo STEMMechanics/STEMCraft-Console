@@ -2,13 +2,13 @@
   <div class="automation-panels">
     <section class="overview-card automation-card">
       <div class="card-header"><span><i class="fa-solid fa-terminal"></i> Commands</span>{% if user.can("automation.manage") %}<button class="panel-header-button" type="button" onclick="openServerScheduleModal('command')"><i class="fa-solid fa-plus"></i> Add command</button>{% endif %}</div>
-      <div id="command-schedule-list" class="schedule-list">Loading commands...</div>
+      <div id="command-schedule-list" class="schedule-list"><div class="empty-message">Loading commands...</div></div>
     </section>
 
     <section class="overview-card automation-card">
       <div class="card-header"><span><i class="fa-solid fa-box-archive"></i> Backups</span>{% if user.can("automation.manage") %}<button class="panel-header-button" type="button" onclick="openServerScheduleModal('backup')"><i class="fa-solid fa-plus"></i> Add backup</button>{% endif %}</div>
       <div id="scheduled-backup-progress" class="scheduled-backup-progress"></div>
-      <div id="backup-schedule-list" class="schedule-list">Loading backups...</div>
+      <div id="backup-schedule-list" class="schedule-list"><div class="empty-message">Loading backups...</div></div>
     </section>
   </div>
 
