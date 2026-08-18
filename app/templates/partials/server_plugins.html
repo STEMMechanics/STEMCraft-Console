@@ -25,25 +25,6 @@
     </div>
 
 
-    <div class="plugins-toolbar">
-
-        <input
-            id="plugin-search"
-            type="search"
-            placeholder="Search installed plugins..."
-        >
-
-        {% if user.can("plugins.manage") %}
-        <div id="plugin-bulk-actions" class="plugin-bulk-actions">
-            <span id="plugin-selected-count">0 selected</span>
-            <button class="button" type="button" onclick="bulkPluginAction('enable')">Enable</button>
-            <button class="button" type="button" onclick="bulkPluginAction('disable')">Disable</button>
-            <button class="button danger" type="button" onclick="bulkPluginAction('remove')">Delete</button>
-        </div>
-        {% endif %}
-
-    </div>
-
     {% if user.can("plugins.manage") %}
     <section class="overview-card plugin-install-card">
       <div class="card-header"><span>Install Plugin</span></div>
@@ -62,6 +43,15 @@
       <p id="plugin-install-status" class="muted-small"></p>
     </section>
     {% endif %}
+
+
+    <div class="plugins-toolbar">
+        <input
+            id="plugin-search"
+            type="search"
+            placeholder="Search installed plugins..."
+        >
+    </div>
 
 
     <section class="overview-card">
@@ -88,6 +78,17 @@
         >
             <div class="empty-message">Loading plugins...</div>
         </div>
+
+        {% if user.can("plugins.manage") %}
+        <div id="plugin-bulk-actions" class="plugin-bulk-actions">
+            <span id="plugin-selected-count">0 selected</span>
+            <div class="plugin-bulk-buttons">
+                <button class="button" type="button" onclick="bulkPluginAction('enable')">Enable</button>
+                <button class="button" type="button" onclick="bulkPluginAction('disable')">Disable</button>
+                <button class="button danger" type="button" onclick="bulkPluginAction('remove')">Delete</button>
+            </div>
+        </div>
+        {% endif %}
 
     </section>
 
