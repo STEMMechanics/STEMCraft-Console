@@ -7,11 +7,34 @@ from app.plugin_manager import (
     _validate_public_https_url, duplicate_plugin_groups, geyser_status,
     enable_plugin, install_plugin_file, list_plugins, PluginFileExistsError,
 )
+from app.web_plugins import plugin_action_requires_restart
 
 
 def make_plugin(path, version="1.0"):
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("plugin.yml", f"name: Example\nversion: {version}\n")
+
+
+@pytest.mark.parametrize(("action", "filenames", "running", "expected"), [
+    ("remove", ["disabled.jar.disabled"], True, False),
+    ("remove", ["active.jar"], True, True),
+    ("remove", ["active.jar", "disabled.jar.disabled"], True, True),
+    ("disable", ["active.jar"], True, True),
+    ("enable", ["disabled.jar.disabled"], True, True),
+    ("remove", ["active.jar"], False, False),
+    ("disable", ["active.jar"], False, False),
+])
+def test_restart_requirement_matches_loaded_plugin_changes(
+    action, filenames, running, expected,
+):
+    plugins = [
+        {"filename": "active.jar", "enabled": True},
+        {"filename": "disabled.jar.disabled", "enabled": False},
+    ]
+
+    assert plugin_action_requires_restart(
+        action, filenames, plugins, running,
+    ) is expected
 
 
 def test_install_plugin_file_validates_and_installs_atomically(tmp_path):

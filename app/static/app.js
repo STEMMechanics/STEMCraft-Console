@@ -988,9 +988,11 @@ async function installUploadedPlugin(file, replace = false) {
       return;
     }
     if (!response.ok) throw new Error(data.error || "Plugin upload failed");
-    status.textContent = `${data.plugin.name} ${replace ? "replaced" : "installed"}. Restart required.`;
+    status.textContent = `${data.plugin.name} ${replace ? "replaced" : "installed"}.${
+      data.action_requires_restart ? " Restart required." : ""
+    }`;
     latestInstalledPluginFilename = data.plugin.filename;
-    pluginRestartRequired = true;
+    pluginRestartRequired = data.restart_required === true;
     showPluginRestartAlert();
     await updatePluginsPage(true);
   } catch (error) {
@@ -1027,10 +1029,12 @@ async function installPluginUrl(url, replace = false) {
       return;
     }
     if (!response.ok) throw new Error(data.error || "Plugin download failed");
-    status.textContent = `${data.plugin.name} ${replace ? "replaced" : "installed"}. Restart required.`;
+    status.textContent = `${data.plugin.name} ${replace ? "replaced" : "installed"}.${
+      data.action_requires_restart ? " Restart required." : ""
+    }`;
     latestInstalledPluginFilename = data.plugin.filename;
     form.reset();
-    pluginRestartRequired = true;
+    pluginRestartRequired = data.restart_required === true;
     showPluginRestartAlert();
     await updatePluginsPage(true);
   } catch (error) {
@@ -1045,9 +1049,9 @@ function openPluginReplaceModal(pending, conflict) {
   const state = document.getElementById("replace-plugin-state");
   if (!modal || !filename || !state) return;
   filename.textContent = conflict.filename;
-  state.textContent = conflict.enabled
-    ? "The existing plugin is enabled. The replacement will take effect after the server restarts."
-    : "The existing plugin is disabled. Replacing it will install the new build as enabled.";
+  state.textContent = pluginServerRunning
+    ? "The replacement changes the plugins loaded by the running server, so a restart will be required."
+    : "The replacement will be loaded when the server is next started.";
   modal.hidden = false;
 }
 
@@ -1466,7 +1470,7 @@ async function disableSelectedDuplicatePlugins() {
   }
   const modal = document.getElementById("plugin-duplicates-modal");
   if (modal) modal.hidden = true;
-  pluginRestartRequired = true;
+  pluginRestartRequired = data.restart_required === true;
   showPluginRestartAlert();
   await updatePluginsPage();
 }
@@ -2521,7 +2525,7 @@ async function togglePlugin(
     return;
   }
 
-  pluginRestartRequired = true;
+  pluginRestartRequired = data.restart_required === true;
 
   showPluginRestartAlert();
 
@@ -2624,7 +2628,7 @@ async function confirmPluginRemove() {
     return;
   }
 
-  pluginRestartRequired = true;
+  pluginRestartRequired = data.restart_required === true;
 
   closePluginRemoveModal();
 
