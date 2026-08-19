@@ -219,15 +219,16 @@ def startup():
     db = SessionLocal()
     try:
         from .models import Server
-        from .java_runtime import discover_java_runtimes, select_java_runtime
+        from .java_runtime import discover_java_runtimes, reconcile_java_path
         fail_abandoned_backup_jobs(db)
         servers = db.query(Server).all()
         runtimes = discover_java_runtimes()
         for server in servers:
-            if not server.java_path or server.java_path == "java":
-                selected = select_java_runtime(runtimes, server.minecraft_version)
-                if selected:
-                    server.java_path = selected
+            selected = reconcile_java_path(
+                server.java_path, runtimes, server.minecraft_version,
+            )
+            if selected:
+                server.java_path = selected
         db.commit()
         for server in servers:
             register_server(server)

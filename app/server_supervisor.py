@@ -167,7 +167,17 @@ def main() -> None:
             options.min_memory = server.min_memory
             options.jar = server.jar_name
             options.java_args = server.java_args
-            options.java_path = server.java_path
+            from .java_runtime import discover_java_runtimes, reconcile_java_path
+            options.java_path = reconcile_java_path(
+                server.java_path,
+                discover_java_runtimes(),
+                server.minecraft_version,
+            )
+            if not options.java_path:
+                parser.error("no installed Java runtime found")
+            if options.java_path != server.java_path:
+                server.java_path = options.java_path
+                db.commit()
             options.socket = str(SYSTEMD_SOCKET_DIR / f"{server.service_name}.sock")
         finally:
             db.close()
