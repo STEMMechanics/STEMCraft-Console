@@ -32,6 +32,25 @@ def test_select_java_runtime_prefers_exact_recommendation():
     assert java_runtime.select_java_runtime(runtimes, "1.21.11") == "/java/21"
 
 
+def test_reconcile_java_path_replaces_updated_jdk_with_same_major():
+    runtimes = [
+        {"path": "/usr/lib/jvm/jdk-25.0.5-oracle-aarch64/bin/java", "major": 25},
+        {"path": "/usr/lib/jvm/java-21-openjdk/bin/java", "major": 21},
+    ]
+
+    assert java_runtime.reconcile_java_path(
+        "/usr/lib/jvm/jdk-25.0.4-oracle-aarch64/bin/java", runtimes, "1.21.11",
+    ) == "/usr/lib/jvm/jdk-25.0.5-oracle-aarch64/bin/java"
+
+
+def test_reconcile_java_path_keeps_an_available_runtime():
+    runtimes = [{"path": "/java/21", "major": 21}]
+
+    assert java_runtime.reconcile_java_path(
+        "/java/21", runtimes, "26.2",
+    ) == "/java/21"
+
+
 def test_server_form_runtime_choices_do_not_expose_paths_or_vendor_details():
     runtimes = [
         {"path": "/secret/java-25-a", "major": 25, "name": "Vendor A"},

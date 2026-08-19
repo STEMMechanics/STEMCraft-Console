@@ -85,6 +85,34 @@ def select_java_runtime(runtimes: list[dict], minecraft_version: str | None) -> 
     return (exact or (runtimes[0] if runtimes else None) or {}).get("path")
 
 
+def reconcile_java_path(
+    configured_path: str | None,
+    runtimes: list[dict],
+    minecraft_version: str | None,
+) -> str | None:
+    """Replace a removed versioned Java path while preserving its major version."""
+    configured = str(configured_path or "java").strip()
+    available_paths = {item["path"] for item in runtimes}
+    if configured in available_paths:
+        return configured
+
+    try:
+        resolved = str(Path(configured).resolve(strict=True))
+    except (OSError, RuntimeError):
+        resolved = ""
+    if resolved in available_paths:
+        return resolved
+
+    match = re.search(r"(?:java|jdk)[-_]?(\d+)", configured, re.I)
+    if match:
+        major = int(match.group(1))
+        same_major = next((item for item in runtimes if item["major"] == major), None)
+        if same_major:
+            return same_major["path"]
+
+    return select_java_runtime(runtimes, minecraft_version)
+
+
 def java_runtime_choices(runtimes: list[dict] | None = None) -> list[dict]:
     """Return path-free runtime choices suitable for non-admin server forms."""
     majors = sorted({item["major"] for item in (runtimes or discover_java_runtimes())}, reverse=True)
