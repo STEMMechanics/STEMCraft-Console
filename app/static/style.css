@@ -1240,6 +1240,7 @@ button.restart:hover {
 }
 
 .plugin-main {
+  flex-grow: 1;
   min-width: 0;
 }
 
@@ -2706,6 +2707,16 @@ input[type="checkbox"] {
 }
 
 .plugin-bulk-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+}
+
+.plugin-bulk-buttons {
     display: flex;
     align-items: center;
     gap: 0.5rem;

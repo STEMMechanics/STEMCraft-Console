@@ -50,6 +50,33 @@ from .processes import server_status
 router = APIRouter()
 
 
+def plugin_action_requires_restart(
+    action: str,
+    filenames: list[str],
+    plugins: list[dict],
+    running: bool,
+) -> bool:
+    """Return whether this mutation changes plugins loaded by a live server."""
+    if not running:
+        return False
+    enabled = {
+        plugin["filename"]: bool(plugin.get("enabled"))
+        for plugin in plugins
+    }
+    if action == "enable":
+        return any(enabled.get(filename) is False for filename in filenames)
+    if action in {"disable", "remove"}:
+        return any(enabled.get(filename) is True for filename in filenames)
+    return False
+
+
+def record_plugin_restart_requirement(db, server, required: bool) -> bool:
+    if required and not server.plugins_dirty:
+        server.plugins_dirty = True
+        db.commit()
+    return bool(server.plugins_dirty)
+
+
 @router.post("/api/web/servers/{server_id}/plugins/upload")
 async def upload_plugin(server_id: int, request: Request, plugin: UploadFile = File(), db: Session = Depends(get_db)):
     user, server = get_accessible_server(server_id, request, db)
@@ -69,11 +96,14 @@ async def upload_plugin(server_id: int, request: Request, plugin: UploadFile = F
                 temporary.write(chunk)
             temporary.flush()
             result = install_plugin_file(server, Path(temporary.name), filename, replace=replace)
-        server.plugins_dirty = True
-        db.commit()
+        action_requires_restart = bool(server_status(server.id).get("running"))
+        restart_required = record_plugin_restart_requirement(
+            db, server, action_requires_restart,
+        )
         return {
             "plugin": result,
-            "restart_required": True,
+            "restart_required": restart_required,
+            "action_requires_restart": action_requires_restart,
             "duplicates": duplicate_plugin_groups(list_plugins(server)),
         }
     except PluginFileExistsError as error:
@@ -102,11 +132,14 @@ async def download_plugin(server_id: int, request: Request, db: Session = Depend
             str(data.get("url", "")).strip(),
             replace=data.get("replace") is True,
         )
-        server.plugins_dirty = True
-        db.commit()
+        action_requires_restart = bool(server_status(server.id).get("running"))
+        restart_required = record_plugin_restart_requirement(
+            db, server, action_requires_restart,
+        )
         return {
             "plugin": result,
-            "restart_required": True,
+            "restart_required": restart_required,
+            "action_requires_restart": action_requires_restart,
             "duplicates": duplicate_plugin_groups(list_plugins(server)),
         }
     except PluginFileExistsError as error:
@@ -234,9 +267,10 @@ async def resolve_plugin_duplicates(
     filenames = data.get("disable")
     if not isinstance(filenames, list) or not all(isinstance(item, str) for item in filenames):
         return JSONResponse({"error": "Select valid plugin files"}, status_code=400)
+    current_plugins = list_plugins(server)
     allowed = {
         plugin["filename"]
-        for group in duplicate_plugin_groups(list_plugins(server))
+        for group in duplicate_plugin_groups(current_plugins)
         for plugin in group["plugins"]
     }
     selected = list(dict.fromkeys(filenames))
@@ -247,13 +281,18 @@ async def resolve_plugin_duplicates(
             disable_plugin(server, filename)
     except (ValueError, FileNotFoundError, FileExistsError, OSError) as error:
         return JSONResponse({"error": str(error)}, status_code=400)
-    if selected:
-        server.plugins_dirty = True
-        db.commit()
+    action_requires_restart = plugin_action_requires_restart(
+        "disable", selected, current_plugins,
+        bool(server_status(server.id).get("running")),
+    )
+    restart_required = record_plugin_restart_requirement(
+        db, server, action_requires_restart,
+    )
     return {
         "success": True,
         "message": f"Disabled {len(selected)} duplicate plugin file(s).",
-        "restart_required": bool(selected),
+        "restart_required": restart_required,
+        "action_requires_restart": action_requires_restart,
         "duplicates": duplicate_plugin_groups(list_plugins(server)),
     }
 
@@ -302,6 +341,12 @@ async def plugin_action(
         "",
     )
 
+    current_plugins = list_plugins(server)
+    action_requires_restart = plugin_action_requires_restart(
+        action, filenames, current_plugins,
+        bool(server_status(server.id).get("running")),
+    )
+
 
     try:
 
@@ -339,12 +384,13 @@ async def plugin_action(
         )
 
 
-    server.plugins_dirty = True
-
-    db.commit()
+    restart_required = record_plugin_restart_requirement(
+        db, server, action_requires_restart,
+    )
 
     return {
         "success": True,
-        "restart_required": True,
+        "restart_required": restart_required,
+        "action_requires_restart": action_requires_restart,
         "affected": len(filenames),
     }
