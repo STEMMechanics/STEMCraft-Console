@@ -195,19 +195,15 @@ def resolve_server_jar(directory: str | Path, jar_name: str) -> Path:
 
 
 def _validate_java_args(arguments: list[str]) -> None:
-    reserved = ("-xms", "-xmx", "-jar", "-cp", "-classpath", "--class-path")
     for argument in arguments:
         lowered = argument.lower()
         if (
-            lowered.startswith(reserved)
+            lowered.startswith(("-xms", "-xmx"))
+            or lowered == "-jar"
             or lowered.startswith("@")
-            or "/" in argument
-            or "\\" in argument
-            or ".." in argument
-            or re.match(r"^[a-zA-Z]:", argument)
         ):
             raise ValueError(
-                "Java startup options cannot override memory, the server JAR, or reference file paths"
+                "Java startup options cannot override memory or the server JAR, or use argument files"
             )
 
 
