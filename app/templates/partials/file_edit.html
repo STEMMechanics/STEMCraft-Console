@@ -36,6 +36,8 @@
             value="{{ file_path }}"
         >
 
+        <input type="hidden" name="confirm_unknown" value="{{ 'true' if confirm_unknown else 'false' }}">
+
         <textarea
             name="contents"
             class="file-editor"

@@ -30,6 +30,13 @@
                 <input id="file-upload" type="file" multiple onchange="uploadFiles(this.files)">
             </label>
 
+            <label class="file-upload-button" for="folder-upload">
+                <i class="fa-solid fa-folder-arrow-up"></i>
+                Upload Folder
+
+                <input id="folder-upload" type="file" webkitdirectory multiple onchange="uploadFiles(this.files, true)">
+            </label>
+
         </div>{% endif %}
 
     </div>
@@ -94,11 +101,13 @@
 
                 <i class="fa-regular fa-file file-document"></i>
 
-                {% if entry.editable and user.can("files.manage") %}
+                {% if entry.text_candidate and user.can("files.manage") %}
 
                 <a href="/servers/{{ server.id }}/files/edit?path={{ entry.path }}"
-                    hx-get="/servers/{{ server.id }}/files/edit?path={{ entry.path }}" hx-target="#page-content"
-                    hx-push-url="true">
+                    {% if entry.editable %}hx-get="/servers/{{ server.id }}/files/edit?path={{ entry.path }}"
+                    hx-target="#page-content" hx-push-url="true"{% else %}
+                    data-edit-path="{{ entry.path | e }}"
+                    onclick="return openUnknownTextFile(event, this.dataset.editPath)"{% endif %}>
                     {{ entry.name }}
                 </a>
 
@@ -144,6 +153,14 @@
                     <i class="fa-solid fa-pen"></i>
                 </button>
 
+                <button class="file-action-button" data-entry-path="{{ entry.path | e }}" onclick="zipFileEntry(this.dataset.entryPath)" title="Create ZIP">
+                    <i class="fa-solid fa-file-zipper"></i>
+                </button>
+
+                {% if entry.is_zip %}<button class="file-action-button" data-entry-path="{{ entry.path | e }}" onclick="extractZipEntry(this.dataset.entryPath)" title="Extract ZIP">
+                    <i class="fa-solid fa-box-open"></i>
+                </button>{% endif %}
+
 
                 <button class="file-action-button danger-icon" onclick="openDeleteFileModal(
                         '{{ entry.path | e }}',
@@ -169,6 +186,19 @@
 
     </section>
 
+</div>
+
+
+<div id="file-conflict-modal" class="modal-backdrop" hidden>
+    <div class="modal-card">
+        <h2 id="file-conflict-title">Existing item</h2>
+        <p id="file-conflict-message"></p>
+        <div class="modal-actions">
+            <button class="button" onclick="resolveFileConflict('cancel')">Cancel</button>
+            <button id="file-conflict-merge" class="button" onclick="resolveFileConflict('merge')">Merge &amp; Replace</button>
+            <button id="file-conflict-replace" class="button danger" onclick="resolveFileConflict('replace')">Full Replace</button>
+        </div>
+    </div>
 </div>
 
 
