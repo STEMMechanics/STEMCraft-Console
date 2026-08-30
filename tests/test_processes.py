@@ -75,11 +75,27 @@ def test_server_jar_rejects_symlink_to_external_file(tmp_path):
 
 @pytest.mark.parametrize(
     "java_args",
-    ["-Xmx8G", "-jar other.jar", "@/etc/java.args", "-Dconfig=../../secret"],
+    ["-Xmx8G", "-Xms2G", "-jar other.jar", "@/etc/java.args"],
 )
-def test_java_options_cannot_override_managed_values_or_reference_paths(java_args):
+def test_java_options_cannot_override_managed_values_or_use_argument_files(java_args):
     with pytest.raises(ValueError, match="cannot override memory"):
         build_java_command("4G", "paper.jar", java_args)
+
+
+def test_java_options_allow_paths_and_urls_in_flag_values():
+    java_args = (
+        "-Xlog:gc*:logs/gc.log:time,uptime:filecount=5,filesize=10M "
+        "-Dusing.aikars.flags=https://mcflags.emc.gs "
+        "-Daikars.new.flags=true"
+    )
+
+    command = build_java_command("4G", "paper.jar", java_args)
+
+    assert command[3:-3] == [
+        "-Xlog:gc*:logs/gc.log:time,uptime:filecount=5,filesize=10M",
+        "-Dusing.aikars.flags=https://mcflags.emc.gs",
+        "-Daikars.new.flags=true",
+    ]
 
 
 def test_register_server_rejects_unsafe_systemd_instance():
