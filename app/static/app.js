@@ -2761,17 +2761,101 @@ function updateDocumentTitle() {
 
 updateDocumentTitle();
 
-async function uploadFiles(files) {
+let fileConflictResolver = null;
+
+function askFileConflict(title, message, folders = true) {
+  const modal = document.getElementById("file-conflict-modal");
+  if (!modal) return Promise.resolve("cancel");
+  document.getElementById("file-conflict-title").textContent = title;
+  document.getElementById("file-conflict-message").textContent = message;
+  const merge = document.getElementById("file-conflict-merge");
+  const replace = document.getElementById("file-conflict-replace");
+  merge.textContent = folders ? "Merge & Replace" : "Replace";
+  replace.hidden = !folders;
+  modal.hidden = false;
+  return new Promise((resolve) => {
+    fileConflictResolver = resolve;
+  });
+}
+
+function resolveFileConflict(mode) {
+  const modal = document.getElementById("file-conflict-modal");
+  if (modal) modal.hidden = true;
+  if (fileConflictResolver) fileConflictResolver(mode);
+  fileConflictResolver = null;
+}
+
+function filesWithPaths(files, folderUpload = false) {
+  return Array.from(files).map((file) => ({
+    file,
+    path: folderUpload && file.webkitRelativePath
+      ? file.webkitRelativePath
+      : file.name,
+  }));
+}
+
+function currentFileNames() {
+  return new Set(Array.from(document.querySelectorAll("#file-browser .file-row[data-name]"))
+    .map((row) => row.dataset.name));
+}
+
+function joinFilePath(parent, child) {
+  return parent ? `${parent}/${child}` : child;
+}
+
+async function deleteUploadConflicts(page, names) {
+  for (const name of names) {
+    const response = await fetch(
+      `/api/web/servers/${page.dataset.serverId}/files/delete`,
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({path: joinFilePath(page.dataset.currentPath || "", name)}),
+      },
+    );
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || `Unable to replace ${name}`);
+    }
+  }
+}
+
+async function uploadFiles(files, folderUpload = false) {
   const page = currentFilesPage();
+
+  const uploads = Array.isArray(files) && files.length && files[0].file
+    ? files
+    : filesWithPaths(files, folderUpload);
 
   if (
     !page ||
-    !files.length
+    !uploads.length
   ) {
     return;
   }
 
-  for (const file of files) {
+  const roots = new Set(uploads.map((upload) => upload.path.split("/")[0]));
+  const conflicts = [...roots].filter((name) => currentFileNames().has(name));
+  const containsFolders = uploads.some((upload) => upload.path.includes("/"));
+  let mode = "new";
+
+  if (conflicts.length) {
+    mode = await askFileConflict(
+      containsFolders ? "Folder already exists" : "File already exists",
+      containsFolders
+        ? "Merge and replace matching files, or fully replace the existing folder?"
+        : "Replace the existing file?",
+      containsFolders,
+    );
+    if (mode === "cancel") return;
+  }
+
+  try {
+    if (mode === "replace") {
+      await deleteUploadConflicts(page, conflicts);
+    }
+
+  for (const upload of uploads) {
     const form = new FormData();
 
     form.append(
@@ -2781,8 +2865,11 @@ async function uploadFiles(files) {
 
     form.append(
       "file",
-      file,
+      upload.file,
     );
+
+    form.append("relative_path", upload.path);
+    form.append("replace", mode === "merge" ? "true" : "false");
 
     const response = await fetch(
       `/servers/${page.dataset.serverId}/files/upload`,
@@ -2794,13 +2881,72 @@ async function uploadFiles(files) {
 
     if (!response.ok) {
       alert(
-        `Unable to upload ${file.name}`,
+        `Unable to upload ${upload.file.name}: ${await response.text()}`,
       );
 
       return;
     }
   }
 
+  } catch (error) {
+    alert(error.message || "Unable to upload files");
+    return;
+  }
+
+  reloadFilesPage();
+}
+
+function openUnknownTextFile(event, path) {
+  event.preventDefault();
+  if (!window.confirm("This file type is not recognised. Open it as text anyway?")) {
+    return false;
+  }
+  const page = currentFilesPage();
+  const url = `/servers/${page.dataset.serverId}/files/edit?path=${encodeURIComponent(path)}&confirm_unknown=true`;
+  htmx.ajax("GET", url, {target: "#page-content", swap: "innerHTML"});
+  history.pushState({}, "", url);
+  return false;
+}
+
+async function zipFileEntry(path) {
+  const page = currentFilesPage();
+  const response = await fetch(`/api/web/servers/${page.dataset.serverId}/files/zip`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({path}),
+  });
+  const data = await response.json();
+  if (!response.ok) return alert(data.error || "Unable to create ZIP");
+  reloadFilesPage();
+}
+
+async function extractZipEntry(path) {
+  const page = currentFilesPage();
+  const endpoint = `/api/web/servers/${page.dataset.serverId}/files/extract`;
+  let response = await fetch(endpoint, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({path, mode: "check"}),
+  });
+  let data = await response.json();
+  if (!response.ok) return alert(data.error || "Unable to inspect ZIP");
+
+  let mode = "merge";
+  if (data.conflicts.length) {
+    mode = await askFileConflict(
+      "Items already exist",
+      "Merge and replace matching files, or fully replace the conflicting folders and files?",
+      true,
+    );
+    if (mode === "cancel") return;
+  }
+  response = await fetch(endpoint, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({path, mode}),
+  });
+  data = await response.json();
+  if (!response.ok) return alert(data.error || "Unable to extract ZIP");
   reloadFilesPage();
 }
 
@@ -2923,7 +3069,7 @@ function handleFileBrowserDragLeave(
   }
 }
 
-function handleFileBrowserDrop(
+async function handleFileBrowserDrop(
   event,
 ) {
   event.preventDefault();
@@ -2936,6 +3082,18 @@ function handleFileBrowserDrop(
     return;
   }
 
+  const items = Array.from(event.dataTransfer.items || []);
+  const entries = items.map((item) => item.webkitGetAsEntry && item.webkitGetAsEntry()).filter(Boolean);
+
+  if (entries.some((entry) => entry.isDirectory)) {
+    const uploads = [];
+    for (const entry of entries) {
+      await collectDroppedFiles(entry, "", uploads);
+    }
+    uploadFiles(uploads, true);
+    return;
+  }
+
   const files = event.dataTransfer.files;
 
   if (
@@ -2945,6 +3103,23 @@ function handleFileBrowserDrop(
     uploadFiles(
       files,
     );
+  }
+}
+
+async function collectDroppedFiles(entry, parent, uploads) {
+  const path = parent ? `${parent}/${entry.name}` : entry.name;
+  if (entry.isFile) {
+    const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+    uploads.push({file, path});
+    return;
+  }
+  const reader = entry.createReader();
+  while (true) {
+    const children = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+    if (!children.length) break;
+    for (const child of children) {
+      await collectDroppedFiles(child, path, uploads);
+    }
   }
 }
 

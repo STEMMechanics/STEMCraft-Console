@@ -1660,7 +1660,7 @@ button.restart:hover {
   display: grid;
 
   grid-template-columns:
-    minmax(0, 1fr) 170px 110px 150px;
+    minmax(0, 1fr) 170px 110px 190px;
 
   align-items: center;
 }
@@ -3254,7 +3254,7 @@ input[type="checkbox"] {
   }
 
   .file-browser-header {
-    grid-template-columns: minmax(180px, 1fr) 145px 80px 76px;
+    grid-template-columns: minmax(180px, 1fr) 145px 80px 190px;
   }
 
   .file-row {

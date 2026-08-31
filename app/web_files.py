@@ -6,7 +6,9 @@ from starlette.background import BackgroundTask
 
 from .file_manager import (
     create_folder,
+    create_zip,
     delete_entry,
+    extract_zip,
     list_directory,
     move_entry,
     read_text_file,
@@ -136,6 +138,8 @@ async def upload_file(
     ),
 
     file: UploadFile = File(...),
+    relative_path: str = Form(default=""),
+    replace: bool = Form(default=False),
 
     db: Session = Depends(get_db),
 ):
@@ -166,9 +170,12 @@ async def upload_file(
     )
 
 
-    filename = Path(
-        file.filename or ""
-    ).name
+    upload_name = relative_path or file.filename or ""
+    relative_parts = Path(upload_name).parts
+    if not relative_parts or Path(upload_name).is_absolute() or ".." in relative_parts:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    filename = Path(upload_name).name
 
     if not filename:
         raise HTTPException(
@@ -177,14 +184,36 @@ async def upload_file(
         )
 
 
-    destination = (
-        directory / filename
-    )
+    destination = directory.joinpath(*relative_parts)
+    try:
+        destination.resolve().relative_to(directory.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+    except (FileExistsError, NotADirectoryError):
+        raise HTTPException(
+            status_code=409,
+            detail="A file blocks the uploaded folder path",
+        )
+
+    if destination.exists() and destination.is_dir():
+        raise HTTPException(status_code=409, detail="A folder with that name already exists")
+    if destination.exists() and not replace:
+        raise HTTPException(status_code=409, detail="A file with that name already exists")
 
 
     written = 0
+    temporary = None
     try:
-        with destination.open("xb") as output:
+        temporary_file = tempfile.NamedTemporaryFile(
+            prefix=f".{destination.name}.",
+            suffix=".upload",
+            dir=destination.parent,
+            delete=False,
+        )
+        temporary = Path(temporary_file.name)
+        with temporary_file as output:
             while chunk := await file.read(1024 * 1024):
                 written += len(chunk)
                 if written > MAX_UPLOAD_BYTES:
@@ -193,13 +222,15 @@ async def upload_file(
                         detail="Uploaded file is too large",
                     )
                 output.write(chunk)
+        temporary.replace(destination)
     except FileExistsError:
         raise HTTPException(
             status_code=409,
             detail="A file with that name already exists",
         )
     except Exception:
-        destination.unlink(missing_ok=True)
+        if temporary:
+            temporary.unlink(missing_ok=True)
         raise
     finally:
         await file.close()
@@ -289,6 +320,7 @@ def edit_file_page(
     server_id: int,
     request: Request,
     path: str,
+    confirm_unknown: bool = False,
     db: Session = Depends(get_db),
 ):
 
@@ -315,6 +347,7 @@ def edit_file_page(
         contents = read_text_file(
             server,
             path,
+            allow_unknown=confirm_unknown,
         )
 
     except (
@@ -342,6 +375,7 @@ def edit_file_page(
             Path(path).name,
         "contents": contents,
         "parent_path": "" if str(Path(path).parent) == "." else str(Path(path).parent),
+        "confirm_unknown": confirm_unknown,
     })
 
 
@@ -363,6 +397,7 @@ def save_file(
     path: str = Form(),
     contents: str = Form(),
     close: bool = Form(default=False),
+    confirm_unknown: bool = Form(default=False),
 
     db: Session = Depends(get_db),
 ):
@@ -390,6 +425,7 @@ def save_file(
         server,
         path,
         contents,
+        allow_unknown=confirm_unknown,
     )
 
 
@@ -405,6 +441,7 @@ def save_file(
         f"/servers/{server_id}/files?path={quote(parent)}"
         if close else
         f"/servers/{server_id}/files/edit?path={quote(path)}&saved=true"
+        f"{'&confirm_unknown=true' if confirm_unknown else ''}"
     )
     return RedirectResponse(destination, status_code=303)
 
@@ -467,6 +504,43 @@ async def mkdir(
     return {
         "success": True
     }
+
+
+@router.post("/api/web/servers/{server_id}/files/zip")
+async def zip_entry(server_id: int, request: Request, db: Session = Depends(get_db)):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "files.manage"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+
+    data = await request.json()
+    try:
+        archive_path = create_zip(server, data.get("path", ""))
+    except Exception as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    return {"success": True, "path": archive_path}
+
+
+@router.post("/api/web/servers/{server_id}/files/extract")
+async def extract_entry(server_id: int, request: Request, db: Session = Depends(get_db)):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "files.manage"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+
+    data = await request.json()
+    try:
+        conflicts = extract_zip(
+            server,
+            data.get("path", ""),
+            data.get("mode", "check"),
+            MAX_UPLOAD_BYTES,
+        )
+    except (ValueError, FileNotFoundError, zipfile.BadZipFile) as error:
+        return JSONResponse({"error": str(error)}, status_code=400)
+    return {"success": True, "conflicts": conflicts}
 
 
 @router.post(
