@@ -12,6 +12,7 @@ from app.file_manager import (
     is_text_file,
     read_text_file,
     safe_path,
+    write_text_file,
 )
 
 
@@ -103,3 +104,16 @@ def test_extract_zip_rejects_parent_traversal(tmp_path):
 
     with pytest.raises(ValueError, match="unsafe path"):
         extract_zip(server, "unsafe.zip", "merge", 1024)
+
+
+def test_invalid_yaml_is_saved_with_a_warning(tmp_path):
+    path = tmp_path / "config.yml"
+    path.write_text("valid: true\n", encoding="utf-8")
+    server = SimpleNamespace(directory=str(tmp_path))
+
+    warning = write_text_file(server, "config.yml", "broken: [value\n")
+
+    assert path.read_text(encoding="utf-8") == "broken: [value\n"
+    assert warning["line"] == 2
+    assert warning["column"] >= 1
+    assert "YAML" in warning["message"]

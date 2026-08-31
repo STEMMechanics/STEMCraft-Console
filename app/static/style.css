@@ -1832,6 +1832,49 @@ button.restart:hover {
   tab-size: 4;
 }
 
+.code-editor-source {
+  display: none;
+}
+
+.code-editor-host {
+  width: 100%;
+  height: calc(100vh - 230px);
+  min-height: 500px;
+  overflow: hidden;
+  border: 1px solid #282b31;
+  border-radius: 8px;
+}
+
+.code-editor-host .cm-editor,
+.code-editor-host .cm-scroller {
+  height: 100%;
+}
+
+.code-editor-host .cm-scroller {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.editor-warning {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border: 1px solid #e7c477;
+  border-radius: 8px;
+  background: #fff7df;
+  color: #815b09;
+  font-size: 13px;
+}
+
+.warning-text {
+  color: #a66b00 !important;
+}
+
+.code-editor-language {
+  color: var(--accent) !important;
+}
+
 .file-editor-actions {
   display: flex;
   justify-content: flex-end;
@@ -2190,6 +2233,11 @@ button.restart:hover {
   font-size: 12px;
   line-height: 1.5;
   tab-size: 2;
+}
+
+.advanced-property-editor .code-editor-host {
+  height: 400px;
+  min-height: 280px;
 }
 
 .advanced-property-actions {

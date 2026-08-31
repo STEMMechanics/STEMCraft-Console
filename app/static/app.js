@@ -2761,6 +2761,77 @@ function updateDocumentTitle() {
 
 updateDocumentTitle();
 
+function initializeCodeEditors(root = document) {
+  if (!window.STEMCodeEditor) return;
+  root.querySelectorAll("textarea.file-editor").forEach((textarea) => {
+    const warningElement = root.querySelector("[data-editor-warning]");
+    const warning = warningElement ? {
+      message: warningElement.dataset.message,
+      line: Number(warningElement.dataset.line),
+      column: Number(warningElement.dataset.column),
+    } : null;
+    window.STEMCodeEditor.create(textarea, {
+      filename: textarea.dataset.filename,
+      warning,
+    });
+    const form = textarea.form;
+    if (form && !form.dataset.yamlCheckReady && /\.ya?ml$/i.test(textarea.dataset.filename || "")) {
+      form.dataset.yamlCheckReady = "true";
+      form.addEventListener("submit", (event) => validateFileYamlBeforeSave(event, textarea));
+    }
+  });
+}
+
+function showEditorYamlWarning(textarea, warning) {
+  window.STEMCodeEditor?.showWarning(textarea._codeEditor, warning);
+  let banner = document.querySelector("[data-editor-warning]");
+  if (!warning) {
+    if (banner) banner.remove();
+    return;
+  }
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.className = "editor-warning";
+    banner.dataset.editorWarning = "true";
+    document.querySelector(".file-editor-page")?.prepend(banner);
+  }
+  banner.textContent = `${warning.message} at line ${warning.line}, column ${warning.column}.`;
+}
+
+async function validateFileYamlBeforeSave(event, textarea) {
+  const form = event.currentTarget;
+  if (form.dataset.yamlCheckBypass === "true") {
+    delete form.dataset.yamlCheckBypass;
+    return;
+  }
+  event.preventDefault();
+  const page = document.querySelector(".file-editor-page");
+  const submitter = event.submitter;
+  try {
+    const response = await fetch(`/api/web/servers/${page.dataset.serverId}/files/yaml-check`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({content: textarea.value}),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to check YAML");
+    showEditorYamlWarning(textarea, data.warning);
+    if (data.warning && !window.confirm(
+      `${data.warning.message}\nLine ${data.warning.line}, column ${data.warning.column}.\n\nSave anyway?`,
+    )) return;
+  } catch (error) {
+    if (!window.confirm(`${error.message}\n\nThe YAML check could not be completed. Save anyway?`)) return;
+  }
+  form.dataset.yamlCheckBypass = "true";
+  form.requestSubmit(submitter || undefined);
+}
+
+initializeCodeEditors();
+window.addEventListener("stemcraft:editor-ready", () => initializeCodeEditors());
+document.body.addEventListener("htmx:afterSwap", (event) => {
+  initializeCodeEditors(event.detail.target || document);
+});
+
 let fileConflictResolver = null;
 
 function askFileConflict(title, message, folders = true) {
@@ -3860,7 +3931,9 @@ async function loadAdvancedProperties() {
         strong.textContent = file.label;
         const path = document.createElement("small");
         path.textContent = file.path;
-        title.append(strong, path);
+        const language = document.createElement("small");
+        language.className = "code-editor-language";
+        title.append(strong, path, language);
         const status = document.createElement("span");
         status.className = "muted-small advanced-property-status";
         heading.append(title, status);
@@ -3878,6 +3951,13 @@ async function loadAdvancedProperties() {
         actions.appendChild(save);
         editor.append(heading, textarea, actions);
         section.appendChild(editor);
+        if (window.STEMCodeEditor) {
+          window.STEMCodeEditor.create(textarea, {
+            filename: file.path,
+            languageLabel: language,
+            onSave: () => saveAdvancedProperty(editor, save),
+          });
+        }
       });
       container.appendChild(section);
     });
@@ -3887,14 +3967,37 @@ async function loadAdvancedProperties() {
 }
 
 async function saveAdvancedProperty(editor, button) {
-  const page = document.querySelector(".properties-page");
+  const page = document.querySelector(".advanced-properties-page");
   const textarea = editor.querySelector(".advanced-property-content");
   const status = editor.querySelector(".advanced-property-status");
   if (!page || !textarea || !status) return;
   button.disabled = true;
-  status.textContent = "Saving...";
+  status.textContent = "Checking YAML...";
   try {
-    const response = await fetch(
+    let response = await fetch(
+      `/api/web/servers/${page.dataset.serverId}/advanced-properties`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: editor.dataset.path,
+          content: textarea.value,
+          validate_only: true,
+        }),
+      },
+    );
+    let data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to check YAML.");
+    window.STEMCodeEditor?.showWarning(textarea._codeEditor, data.warning);
+    if (data.warning) {
+      status.textContent = `Potential issue · line ${data.warning.line}, column ${data.warning.column}`;
+      status.classList.add("warning-text");
+      if (!window.confirm(
+        `${data.warning.message}\nLine ${data.warning.line}, column ${data.warning.column}.\n\nSave anyway?`,
+      )) return;
+    }
+    status.textContent = "Saving...";
+    response = await fetch(
       `/api/web/servers/${page.dataset.serverId}/advanced-properties`,
       {
         method: "POST",
@@ -3902,9 +4005,16 @@ async function saveAdvancedProperty(editor, button) {
         body: JSON.stringify({ path: editor.dataset.path, content: textarea.value }),
       },
     );
-    const data = await response.json();
+    data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unable to save configuration.");
-    status.textContent = data.running ? "Saved · restart required" : "Saved";
+    if (data.warning) {
+      status.textContent = `Saved with warning · line ${data.warning.line}, column ${data.warning.column}`;
+      status.classList.add("warning-text");
+    } else {
+      status.textContent = data.running ? "Saved · restart required" : "Saved";
+      status.classList.remove("warning-text");
+    }
+    window.STEMCodeEditor?.showWarning(textarea._codeEditor, data.warning);
   } catch (error) {
     status.textContent = error.message;
   } finally {

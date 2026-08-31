@@ -1,6 +1,7 @@
 import shutil
 import stat
 import zipfile
+import yaml
 from datetime import datetime
 
 from pathlib import Path
@@ -271,6 +272,29 @@ def write_text_file(
         contents,
         encoding="utf-8",
     )
+
+    if path.suffix.lower() in {".yml", ".yaml"}:
+        return yaml_sanity_warning(contents)
+    return None
+
+
+def yaml_sanity_warning(contents: str):
+    try:
+        document = yaml.safe_load(contents)
+    except yaml.YAMLError as error:
+        mark = getattr(error, "problem_mark", None)
+        return {
+            "message": f"Potential YAML error: {getattr(error, 'problem', None) or 'invalid YAML'}",
+            "line": mark.line + 1 if mark else 1,
+            "column": mark.column + 1 if mark else 1,
+        }
+    if document is not None and not isinstance(document, (dict, list)):
+        return {
+            "message": "Potential YAML error: expected a settings object or list",
+            "line": 1,
+            "column": 1,
+        }
+    return None
 
 
 def is_text_file(path: Path) -> bool:

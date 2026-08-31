@@ -156,3 +156,4 @@ stemcraft-console.db-wal
 
 # Local server process/runtime state
 *.pid
+node_modules/

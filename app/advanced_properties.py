@@ -2,7 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 
-import yaml
+from .file_manager import yaml_sanity_warning
 
 
 MAX_YAML_BYTES = 1024 * 1024
@@ -78,18 +78,11 @@ def discover_advanced_properties(server) -> list[dict]:
     ]
 
 
-def save_advanced_property(server, relative: str, content: str) -> None:
+def save_advanced_property(server, relative: str, content: str):
     if len(content.encode("utf-8")) > MAX_YAML_BYTES:
         raise ValueError("YAML configuration cannot exceed 1 MiB")
     path = _safe_config_path(server, relative)
-    try:
-        document = yaml.safe_load(content)
-    except yaml.YAMLError as error:
-        mark = getattr(error, "problem_mark", None)
-        location = f" at line {mark.line + 1}, column {mark.column + 1}" if mark else ""
-        raise ValueError(f"Invalid YAML{location}") from error
-    if document is not None and not isinstance(document, (dict, list)):
-        raise ValueError("The YAML document must contain settings data")
+    warning = yaml_sanity_warning(content)
 
     descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent, text=True)
     try:
@@ -102,3 +95,4 @@ def save_advanced_property(server, relative: str, content: str) -> None:
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+    return warning
