@@ -41,15 +41,18 @@ def test_saves_valid_yaml_without_removing_comments(tmp_path):
     assert path.read_text() == content
 
 
-def test_rejects_invalid_yaml_without_changing_file(tmp_path):
+def test_saves_invalid_yaml_with_a_warning(tmp_path):
     path = tmp_path / "spigot.yml"
     original = "settings:\n  restart-on-crash: true\n"
     path.write_text(original)
 
-    with pytest.raises(ValueError, match="Invalid YAML"):
-        save_advanced_property(server_for(tmp_path), "spigot.yml", "settings: [broken\n")
+    content = "settings: [broken\n"
+    warning = save_advanced_property(server_for(tmp_path), "spigot.yml", content)
 
-    assert path.read_text() == original
+    assert path.read_text() == content
+    assert warning["line"] == 2
+    assert warning["column"] >= 1
+    assert "YAML" in warning["message"]
 
 
 def test_rejects_symlinked_yaml_file(tmp_path):

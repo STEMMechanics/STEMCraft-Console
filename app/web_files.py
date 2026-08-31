@@ -15,6 +15,7 @@ from .file_manager import (
     rename_entry,
     safe_path,
     write_text_file,
+    yaml_sanity_warning,
 )
 from .config import MAX_UPLOAD_BYTES
 
@@ -54,6 +55,20 @@ from .permissions import has_permission
 
 
 router = APIRouter()
+
+
+@router.post("/api/web/servers/{server_id}/files/yaml-check")
+async def check_yaml(server_id: int, request: Request, db: Session = Depends(get_db)):
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "files.manage"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    data = await request.json()
+    return {
+        "success": True,
+        "warning": yaml_sanity_warning(str(data.get("content", ""))),
+    }
 
 
 @router.get(
@@ -321,6 +336,9 @@ def edit_file_page(
     request: Request,
     path: str,
     confirm_unknown: bool = False,
+    yaml_warning: str = "",
+    warning_line: int = 1,
+    warning_column: int = 1,
     db: Session = Depends(get_db),
 ):
 
@@ -376,6 +394,9 @@ def edit_file_page(
         "contents": contents,
         "parent_path": "" if str(Path(path).parent) == "." else str(Path(path).parent),
         "confirm_unknown": confirm_unknown,
+        "yaml_warning": yaml_warning,
+        "warning_line": warning_line,
+        "warning_column": warning_column,
     })
 
 
@@ -421,7 +442,7 @@ def save_file(
         )
 
 
-    write_text_file(
+    warning = write_text_file(
         server,
         path,
         contents,
@@ -437,11 +458,20 @@ def save_file(
         parent = ""
 
 
+    warning_query = ""
+    if warning:
+        warning_query = (
+            f"&yaml_warning={quote(warning['message'])}"
+            f"&warning_line={warning['line']}"
+            f"&warning_column={warning['column']}"
+        )
+
     destination = (
         f"/servers/{server_id}/files?path={quote(parent)}"
-        if close else
+        if close and not warning else
         f"/servers/{server_id}/files/edit?path={quote(path)}&saved=true"
         f"{'&confirm_unknown=true' if confirm_unknown else ''}"
+        f"{warning_query}"
     )
     return RedirectResponse(destination, status_code=303)
 

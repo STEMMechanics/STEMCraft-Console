@@ -52,6 +52,7 @@ from .java_runtime import (
     select_java_major,
 )
 from .advanced_properties import discover_advanced_properties, save_advanced_property
+from .file_manager import yaml_sanity_warning
 
 
 router = APIRouter()
@@ -83,12 +84,24 @@ async def save_advanced_properties_api(server_id: int, request: Request, db: Ses
     if not server or not has_permission(user, "servers.properties"):
         return JSONResponse({"error": "Access denied"}, status_code=403)
     data = await request.json()
+    content = str(data.get("content", ""))
+    if data.get("validate_only") is True:
+        return {"success": True, "warning": yaml_sanity_warning(content)}
     try:
-        save_advanced_property(server, str(data.get("path", "")), str(data.get("content", "")))
+        warning = save_advanced_property(
+            server,
+            str(data.get("path", "")),
+            content,
+        )
     except (OSError, ValueError) as error:
         return JSONResponse({"error": str(error)}, status_code=400)
     running = bool(server_status(server.id).get("running"))
-    return {"success": True, "running": running, "restart_required": running}
+    return {
+        "success": True,
+        "running": running,
+        "restart_required": running,
+        "warning": warning,
+    }
 
 
 @router.get(

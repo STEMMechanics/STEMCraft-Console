@@ -1,5 +1,11 @@
 <div class="file-editor-page" data-server-id="{{ server.id }}" data-page-title="Edit File">
 
+    {% if yaml_warning %}<div class="editor-warning" data-editor-warning data-message="{{ yaml_warning | e }}"
+        data-line="{{ warning_line }}" data-column="{{ warning_column }}">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        Saved, but YAML may contain an error at line {{ warning_line }}, column {{ warning_column }}: {{ yaml_warning }}
+    </div>{% endif %}
+
     <div class="file-editor-toolbar">
 
         <div>
@@ -41,13 +47,14 @@
         <textarea
             name="contents"
             class="file-editor"
+            data-filename="{{ filename | e }}"
             spellcheck="false"
         >{{ contents }}</textarea>
 
 
         <div class="file-editor-actions">
 
-            <button class="button" type="submit" name="close" value="false">
+            <button class="button" type="submit" name="close" value="false" data-editor-save="true">
                 Save
             </button>
 

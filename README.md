@@ -279,6 +279,15 @@ Then open:
 http://127.0.0.1:8000
 ```
 
+The bundled CodeMirror editor is committed under `app/static` so production
+installations do not require Node.js. When changing `editor-source.js`, rebuild
+that asset with:
+
+```bash
+npm install
+npm run build:editor
+```
+
 Set a persistent, randomly generated secret before first use (at least 32
 characters). Without one, the development server generates a temporary secret
 and sessions are invalidated on restart:
