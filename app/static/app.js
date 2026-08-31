@@ -2764,17 +2764,27 @@ updateDocumentTitle();
 function initializeCodeEditors(root = document) {
   if (!window.STEMCodeEditor) return;
   root.querySelectorAll("textarea.file-editor").forEach((textarea) => {
+    const page = textarea.closest(".file-editor-page");
+    const path = textarea.form?.querySelector('[name="path"]')?.value || textarea.dataset.filename || "";
+    const storageKey = `stemcraft.editor.${page?.dataset.serverId || ""}.${path}`;
     const warningElement = root.querySelector("[data-editor-warning]");
     const warning = warningElement ? {
       message: warningElement.dataset.message,
       line: Number(warningElement.dataset.line),
       column: Number(warningElement.dataset.column),
     } : null;
-    window.STEMCodeEditor.create(textarea, {
+    const view = window.STEMCodeEditor.create(textarea, {
       filename: textarea.dataset.filename,
       warning,
+      storageKey,
     });
     const form = textarea.form;
+    if (form && !form.dataset.editorPositionReady) {
+      form.dataset.editorPositionReady = "true";
+      form.addEventListener("submit", () => {
+        window.STEMCodeEditor?.savePosition(view, storageKey);
+      });
+    }
     if (form && !form.dataset.yamlCheckReady && /\.ya?ml$/i.test(textarea.dataset.filename || "")) {
       form.dataset.yamlCheckReady = "true";
       form.addEventListener("submit", (event) => validateFileYamlBeforeSave(event, textarea));
