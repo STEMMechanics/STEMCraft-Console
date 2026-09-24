@@ -264,7 +264,7 @@ CONFIG_DIR=/etc/stemcraft-console
 SERVICE_USER=stemcraft
 SERVICE_GROUP=stemcraft
 
-for required in app migrations alembic.ini requirements.txt deploy/stemcraft-console.service deploy/stemcraft-server@.service deploy/50-stemcraft-console.rules deploy/stemcraft-console scripts/common.sh; do
+for required in app migrations alembic.ini requirements.txt plugin-monitoring.yml deploy/stemcraft-console.service deploy/stemcraft-server@.service deploy/50-stemcraft-console.rules deploy/stemcraft-console scripts/common.sh; do
   [[ -e "$SOURCE_DIR/$required" ]] || {
     echo "Installation source is incomplete: missing $required" >&2
     exit 1
@@ -335,6 +335,9 @@ install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR" "$DATA_DIR
 install -d -m 0750 -o root -g "$SERVICE_GROUP" "$CONFIG_DIR"
 section "Installing STEMCraft Console application"
 cp -a "$SOURCE_DIR/app" "$SOURCE_DIR/migrations" "$SOURCE_DIR/alembic.ini" "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/"
+if [[ ! -f "$INSTALL_DIR/plugin-monitoring.yml" ]]; then
+  cp -a "$SOURCE_DIR/plugin-monitoring.yml" "$INSTALL_DIR/"
+fi
 
 if [[ ! -x "$INSTALL_DIR/.venv/bin/python" ]]; then
   "$PYTHON_BIN" -m venv "$INSTALL_DIR/.venv"

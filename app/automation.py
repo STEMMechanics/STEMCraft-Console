@@ -324,6 +324,11 @@ def _automation_loop() -> None:
             run_due_tasks()
         except Exception:
             logger.exception("Scheduled task polling failed")
+        try:
+            from .update_monitor import run_scheduled_check
+            run_scheduled_check()
+        except Exception:
+            logger.warning("Scheduled update monitoring failed")
         now = datetime.now().timestamp()
         if now - last_metrics >= METRIC_SECONDS:
             try:

@@ -634,7 +634,7 @@ button.restart:hover {
 }
 
 .empty-message {
-  padding: 20px 0;
+  padding: 20px;
   color: var(--muted);
 }
 
@@ -4697,3 +4697,23 @@ button[aria-disabled="true"]:focus,
   box-shadow: none !important;
   transform: none !important;
 }
+
+
+.plugin-update-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6rem 1.2rem;
+    margin: .75rem 0 0;
+    font-size: .8rem;
+    line-height: 1.4;
+}
+.plugin-update-details dt { color: var(--text-muted, #9ca3af); font-weight: 400; }
+.plugin-update-details dd { margin: 0; overflow-wrap: anywhere; }
+.plugin-update-details .update-check-error { flex-basis: 100%; }
+
+#plugin-monitoring-modal label { display: block; margin: .75rem 0 .35rem; }
+#plugin-monitoring-modal input,
+#plugin-monitoring-modal select { width: 100%; box-sizing: border-box; }
+#plugin-monitoring-error { color: #f87171; overflow-wrap: anywhere; }
+#plugin-monitoring-modal .modal-card { max-height: 90vh; overflow-y: auto; }
+#plugin-monitoring-preview { overflow-wrap: anywhere; padding: .75rem; margin-top: .75rem; border: 1px solid #475569; border-radius: .4rem; }

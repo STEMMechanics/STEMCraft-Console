@@ -14,7 +14,7 @@ fi
 INSTALL_DIR=/opt/stemcraft-console
 BACKUP_DIR=/var/lib/stemcraft-console/upgrades/$(date -u +%Y%m%dT%H%M%SZ)
 
-for required in app migrations alembic.ini requirements.txt deploy/stemcraft-console.service deploy/stemcraft-server@.service deploy/50-stemcraft-console.rules deploy/stemcraft-console; do
+for required in app migrations alembic.ini requirements.txt plugin-monitoring.yml deploy/stemcraft-console.service deploy/stemcraft-server@.service deploy/50-stemcraft-console.rules deploy/stemcraft-console; do
   [[ -e "$SOURCE_DIR/$required" ]] || {
     echo "Upgrade source is incomplete: missing $required" >&2
     exit 1
@@ -34,11 +34,17 @@ fi
 section "Creating rollback snapshot"
 install -d -o stemcraft -g stemcraft "$BACKUP_DIR"
 cp -a "$INSTALL_DIR/app" "$INSTALL_DIR/migrations" "$INSTALL_DIR/alembic.ini" "$INSTALL_DIR/requirements.txt" "$BACKUP_DIR/"
+if [[ -f "$INSTALL_DIR/plugin-monitoring.yml" ]]; then
+  cp -a "$INSTALL_DIR/plugin-monitoring.yml" "$BACKUP_DIR/"
+fi
 cp -a /var/lib/stemcraft-console/stemcraft-console.db "$BACKUP_DIR/" 2>/dev/null || true
 section "Installing application update"
 systemctl stop stemcraft-console.service
 rm -rf "$INSTALL_DIR/app" "$INSTALL_DIR/migrations"
 cp -R "$SOURCE_DIR/app" "$SOURCE_DIR/migrations" "$SOURCE_DIR/alembic.ini" "$SOURCE_DIR/requirements.txt" "$INSTALL_DIR/"
+if [[ ! -f "$INSTALL_DIR/plugin-monitoring.yml" ]]; then
+  cp -a "$SOURCE_DIR/plugin-monitoring.yml" "$INSTALL_DIR/"
+fi
 "$INSTALL_DIR/.venv/bin/python" -m pip install --requirement "$INSTALL_DIR/requirements.txt"
 install -m 0644 "$SOURCE_DIR/deploy/stemcraft-console.service" /etc/systemd/system/stemcraft-console.service
 install -m 0644 "$SOURCE_DIR/deploy/stemcraft-server@.service" /etc/systemd/system/stemcraft-server@.service

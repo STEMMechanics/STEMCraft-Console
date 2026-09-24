@@ -419,3 +419,46 @@ class ServerMetric(Base):
     memory_bytes = Column(Integer, nullable=False, default=0)
     player_count = Column(Integer, nullable=True)
     uptime_seconds = Column(Integer, nullable=True)
+
+
+class UpstreamUpdateCache(Base):
+    __tablename__ = 'upstream_update_cache'
+    key = Column(String(200), primary_key=True)
+    payload = Column(Text, nullable=False)
+    checked_at = Column(DateTime, nullable=False)
+    error = Column(String(255), nullable=True)
+
+
+class ServerUpdateCheck(Base):
+    __tablename__ = 'server_update_checks'
+    server_id = Column(Integer, ForeignKey('servers.id', ondelete='CASCADE'), primary_key=True)
+    component = Column(String(255), primary_key=True)
+    payload = Column(Text, nullable=False)
+
+
+class UpdateNotification(Base):
+    __tablename__ = 'update_notifications'
+    server_id = Column(Integer, ForeignKey('servers.id', ondelete='CASCADE'), primary_key=True)
+    component = Column(String(200), primary_key=True)
+    recipient = Column(String(255), primary_key=True)
+    version = Column(String(200), primary_key=True)
+    sent_at = Column(DateTime, nullable=False)
+
+
+class UpdateMonitorLease(Base):
+    __tablename__ = 'update_monitor_lease'
+    id = Column(Integer, primary_key=True)
+    expires_at = Column(DateTime, nullable=False)
+    last_scheduled_at = Column(DateTime, nullable=True)
+
+
+class PluginMonitoringSetting(Base):
+    __tablename__ = 'plugin_monitoring_settings'
+    server_id = Column(Integer, ForeignKey('servers.id', ondelete='CASCADE'), primary_key=True)
+    plugin_name = Column(String(200), primary_key=True)
+    mode = Column(String(20), nullable=False)
+    provider = Column(String(30), nullable=False, default='')
+    project = Column(Text, nullable=False, default='')
+    version_pattern = Column(Text, nullable=False, default='')
+    link_pattern = Column(Text, nullable=False, default='')
+    installed_pattern = Column(Text, nullable=False, default='')
