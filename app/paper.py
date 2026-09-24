@@ -28,7 +28,11 @@ def inspect_paper_jar(path: str | Path) -> dict:
     jar_path = Path(path)
     try:
         with zipfile.ZipFile(jar_path) as archive:
+            if archive.getinfo("version.json").file_size > 65536:
+                raise ValueError("Paper version metadata exceeds size limit")
             version_data = json.loads(archive.read("version.json"))
+            if not isinstance(version_data, dict):
+                raise ValueError("Invalid Paper version metadata")
     except (OSError, KeyError, json.JSONDecodeError, zipfile.BadZipFile) as error:
         raise ValueError("Unable to identify the installed Paper JAR") from error
 

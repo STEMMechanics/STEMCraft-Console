@@ -61,3 +61,19 @@ def test_rollback_release_restores_snapshot(monkeypatch, tmp_path):
 def test_rollback_release_rejects_path_traversal(tmp_path):
     with pytest.raises(ValueError, match="Invalid rollback identifier"):
         rollback_release("../20260808T120000Z", tmp_path)
+
+
+def test_rollback_restores_saved_monitoring_defaults(monkeypatch, tmp_path):
+    for name in ('app', 'migrations'):
+        (tmp_path / name).mkdir()
+    for name in ('alembic.ini', 'requirements.txt', 'plugin-monitoring.yml'):
+        (tmp_path / name).write_text('new')
+    backup = tmp_path / '.updates' / '20260918T120000Z'
+    backup.mkdir(parents=True)
+    for name in ('app', 'migrations'):
+        (backup / name).mkdir()
+    for name in ('alembic.ini', 'requirements.txt', 'plugin-monitoring.yml'):
+        (backup / name).write_text('saved')
+    monkeypatch.setattr(update_manager.subprocess, 'run', lambda *args, **kwargs: None)
+    rollback_release('20260918T120000Z', tmp_path)
+    assert (tmp_path / 'plugin-monitoring.yml').read_text() == 'saved'

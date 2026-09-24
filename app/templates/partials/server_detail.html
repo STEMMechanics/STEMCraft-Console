@@ -28,7 +28,11 @@
       <div class="summary-value">
         <span id="paper-installed-version">{{ server.minecraft_version or "Unknown" }}{% if server.paper_build %} <small>(build {{ server.paper_build }})</small>{% endif %}</span>
       </div>
-      <small id="paper-version-detail" class="summary-footnote">Checking Paper releases...</small>
+      <div id="paper-version-detail" class="summary-footnote">Loading Paper update status...</div>
+      {% if user.can("servers.properties") %}
+      <button class="button" type="button" onclick="checkMonitoredUpdates(this, 'paper')">Check for updates</button>
+      <span class="muted-small" id="update-check-feedback" role="status"></span>
+      {% endif %}
     </div>
   </div>
 

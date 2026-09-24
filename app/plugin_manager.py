@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 import shutil
 import tempfile
+import yaml
 
 from pathlib import Path
 
@@ -35,36 +36,34 @@ def read_plugin_yml(jar_path: Path) -> dict:
     try:
         with zipfile.ZipFile(jar_path) as jar:
 
-            with jar.open("plugin.yml") as file:
-                text = file.read().decode(
-                    "utf-8",
-                    errors="ignore",
-                )
+            metadata_name = "plugin.yml" if "plugin.yml" in jar.namelist() else "paper-plugin.yml"
+            if jar.getinfo(metadata_name).file_size > 65536:
+                return {}
+            with jar.open(metadata_name) as file:
+                text = file.read(65537).decode("utf-8", errors="ignore")
 
     except (
         OSError,
         KeyError,
         zipfile.BadZipFile,
+        RuntimeError,
+        EOFError,
     ):
         return {}
 
 
-    result = {}
-
-    for line in text.splitlines():
-
-        match = re.match(
-            r"^(name|version):\s*[\"']?(.*?)[\"']?\s*$",
-            line.strip(),
-            re.IGNORECASE,
-        )
-
-        if match:
-            result[
-                match.group(1).lower()
-            ] = match.group(2)
-
-    return result
+    try:
+        metadata = yaml.load(text, Loader=yaml.BaseLoader)
+    except (yaml.YAMLError, RecursionError):
+        return {}
+    if not isinstance(metadata, dict):
+        return {}
+    return {
+        key: value for key in ("name", "version")
+        if isinstance(value := metadata.get(key), str)
+        and 0 < len(value) <= 200
+        and not any(ord(character) < 32 for character in value)
+    }
 
 
 def plugin_config_directory(

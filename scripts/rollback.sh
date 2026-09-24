@@ -20,6 +20,9 @@ done
 
 systemctl stop stemcraft-console.service
 cp -a "$BACKUP_DIR/app" "$BACKUP_DIR/migrations" "$BACKUP_DIR/alembic.ini" "$BACKUP_DIR/requirements.txt" "$INSTALL_DIR/"
+if [[ -f "$BACKUP_DIR/plugin-monitoring.yml" ]]; then
+  cp -a "$BACKUP_DIR/plugin-monitoring.yml" "$INSTALL_DIR/"
+fi
 if [[ -f "$BACKUP_DIR/stemcraft-console.db" ]]; then
   cp -a "$BACKUP_DIR/stemcraft-console.db" /var/lib/stemcraft-console/stemcraft-console.db
 fi

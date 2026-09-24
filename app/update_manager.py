@@ -155,7 +155,8 @@ def get_latest_release():
     }
 
 
-UPDATE_ITEMS = ("app", "migrations", "alembic.ini", "requirements.txt")
+MONITORING_DEFAULTS_FILE = "plugin-monitoring.yml"
+UPDATE_ITEMS = ("app", "migrations", "alembic.ini", "requirements.txt", MONITORING_DEFAULTS_FILE)
 RELEASE_TAG_PATTERN = re.compile(r"^v?[0-9]+(?:\.[0-9]+){1,3}(?:[-+][A-Za-z0-9.-]+)?$")
 ROLLBACK_ID_PATTERN = re.compile(r"^[0-9]{8}T[0-9]{6}Z$")
 
@@ -163,11 +164,13 @@ ROLLBACK_ID_PATTERN = re.compile(r"^[0-9]{8}T[0-9]{6}Z$")
 def _restore_items(root: Path, backup: Path) -> None:
     for name in UPDATE_ITEMS:
         saved = backup / name
-        if not saved.exists():
+        if not saved.exists() and name != MONITORING_DEFAULTS_FILE:
             raise ValueError(f"Rollback is incomplete: missing {name}")
     for name in UPDATE_ITEMS:
         saved = backup / name
         target = root / name
+        if name == MONITORING_DEFAULTS_FILE and not saved.exists():
+            continue  # Snapshots before monitoring defaults existed remain valid.
         if target.exists() and target.is_dir():
             shutil.rmtree(target)
         if saved.is_dir():
@@ -261,6 +264,8 @@ def install_release(tag: str, project_root: Path | None = None) -> dict:
                         shutil.copy2(current, backup / name)
             for name in UPDATE_ITEMS:
                 incoming = source / name
+                if name == MONITORING_DEFAULTS_FILE and ((root / name).exists() or not incoming.exists()):
+                    continue  # Preserve administrator edits and support older releases.
                 if not incoming.exists():
                     raise ValueError(f"Release is missing {name}")
                 target = root / name

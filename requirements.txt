@@ -16,3 +16,5 @@ pytest-cov
 httpx
 python-dotenv
 PyYAML
+packaging
+regex

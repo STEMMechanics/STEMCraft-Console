@@ -45,6 +45,11 @@
     {% endif %}
 
 
+    <p class="muted-small">Updates are checked daily. Monitoring never installs updates.</p>
+    {% if user.can("plugins.manage") %}
+    <button class="button" type="button" onclick="checkMonitoredUpdates(this, 'plugins')">Check for updates</button>
+    <span class="muted-small" id="update-check-feedback" role="status"></span>
+    {% endif %}
     <div class="plugins-toolbar">
         <input
             id="plugin-search"
@@ -193,3 +198,52 @@
     </div>
 
 </div>
+
+{% if user.can("plugins.manage") %}
+<div id="plugin-monitoring-modal" class="modal-backdrop" hidden>
+  <form class="modal-card" onsubmit="savePluginMonitoring(event)">
+    <h2>Update monitoring</h2>
+    <p id="plugin-monitoring-name"></p>
+    <p class="modal-note">These settings apply to this plugin on this server, including replacement JARs with the same plugin name.</p>
+    <label for="plugin-monitoring-mode">Monitoring</label>
+    <select id="plugin-monitoring-mode" onchange="updatePluginMonitoringFields()">
+      <option value="disabled">Do not monitor</option>
+      <option value="custom">Monitor a configured source</option>
+    </select>
+    <div id="plugin-monitoring-custom" hidden>
+      <label for="plugin-monitoring-provider">Provider</label>
+      <select id="plugin-monitoring-provider" onchange="updatePluginMonitoringFields(true)">
+        <option value="github">GitHub Releases</option>
+        <option value="modrinth">Modrinth</option>
+        <option value="jenkins">Jenkins</option>
+        <option value="custom">Custom URL</option>
+      </select>
+      <label for="plugin-monitoring-project">Project or source URL</label>
+      <input id="plugin-monitoring-project" type="text" maxlength="2048" autocomplete="off" oninput="clearMonitoringPreview()">
+      <p id="plugin-monitoring-hint" class="modal-note"></p>
+      <details id="plugin-monitoring-expressions">
+      <summary>Advanced version and link expressions</summary>
+      <label for="plugin-monitoring-version-pattern">Version expression</label>
+      <input id="plugin-monitoring-version-pattern" type="text" maxlength="1024" autocomplete="off" spellcheck="false" oninput="clearMonitoringPreview()">
+      <p id="plugin-monitoring-version-hint" class="modal-note"></p>
+      <div id="plugin-monitoring-link-fields">
+        <label for="plugin-monitoring-link-pattern">Download link expression (optional)</label>
+        <input id="plugin-monitoring-link-pattern" type="text" maxlength="1024" autocomplete="off" spellcheck="false" oninput="clearMonitoringPreview()">
+        <p class="modal-note">Capture a URL in the first group or a named “url” group. Relative links are resolved against the source URL. The link is displayed, never fetched.</p>
+      </div>
+      <label for="plugin-monitoring-installed-pattern">Installed version expression (optional)</label>
+      <input id="plugin-monitoring-installed-pattern" type="text" maxlength="1024" autocomplete="off" spellcheck="false" oninput="clearMonitoringPreview()">
+      <p class="modal-note">Extract the comparable part of the JAR’s version, for example ^([0-9.]+). Expressions use the first capture group or a named “version” group.</p>
+      </details>
+      <button id="plugin-monitoring-preview-button" class="button" type="button" onclick="previewPluginMonitoring()">Preview</button>
+      <div id="plugin-monitoring-preview" role="status" hidden></div>
+      <p class="modal-note">Preview fetches metadata only. It does not save settings, send email or download artifacts. Custom sources have unknown Minecraft compatibility.</p>
+    </div>
+    <p id="plugin-monitoring-error" role="alert"></p>
+    <div class="modal-actions">
+      <button type="button" class="button" onclick="closePluginMonitoring()">Cancel</button>
+      <button type="submit" class="button success">Save</button>
+    </div>
+  </form>
+</div>
+{% endif %}
