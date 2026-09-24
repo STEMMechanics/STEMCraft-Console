@@ -1,0 +1,53 @@
+# Default plugin update sources. Edit this file when a project's release source changes.
+# Per-server settings on the Plugins page override these entries, including Disabled.
+# Names and aliases match plugin.yml/paper-plugin.yml metadata, not JAR filenames.
+# Paper is monitored separately in the server version UI, not as a plugin.
+version: 1
+plugins:
+  AntiPopup:
+    provider: modrinth
+    project: https://modrinth.com/plugin/antipopup
+  Chunky:
+    provider: modrinth
+    project: https://modrinth.com/plugin/chunky
+  Citizens:
+    provider: jenkins
+    project: https://ci.citizensnpcs.co/job/Citizens2/
+    notes: Compares successful Jenkins builds using JAR metadata, with a filename fallback.
+  FastAsyncWorldEdit:
+    aliases: [FAWE]
+    provider: jenkins
+    project: https://ci.athion.net/job/FastAsyncWorldEdit
+    notes: Compares successful Jenkins builds using JAR metadata, with a filename fallback. Use the release page to choose the Paper artifact.
+  Floodgate:
+    aliases: [Floodgate-Spigot]
+    provider: custom
+    project: https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest
+    version_pattern: '"version"\s*:\s*"([^\"]+)"'
+    installed_pattern: '^v?([0-9.]+)'
+    notes: Monitors base-version changes, not individual CI builds. Minecraft compatibility is unknown.
+  Geyser:
+    aliases: [Geyser-Spigot, Geyser-Bukkit]
+    provider: custom
+    project: https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest
+    version_pattern: '"version"\s*:\s*"([^\"]+)"'
+    installed_pattern: '^v?([0-9.]+)'
+    notes: Monitors base-version changes, not individual CI builds. Minecraft compatibility is unknown.
+  LuckPerms:
+    provider: modrinth
+    project: https://modrinth.com/plugin/luckperms
+    version_pattern: '^v?([0-9]+(?:\.[0-9]+)*)'
+  PlaceholderAPI:
+    provider: github
+    project: https://github.com/PlaceholderAPI/PlaceholderAPI
+  PlotSquared:
+    aliases: [PlotSquared Premium]
+    provider: github
+    project: https://github.com/IntellectualSites/PlotSquared
+    notes: Public release metadata only; premium downloads and credentials are not requested.
+  Vault:
+    provider: github
+    project: https://github.com/MilkBowl/Vault
+  ViaVersion:
+    provider: github
+    project: https://github.com/ViaVersion/ViaVersion

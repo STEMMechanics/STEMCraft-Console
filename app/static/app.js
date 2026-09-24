@@ -1186,11 +1186,14 @@ function renderPlugins() {
 
                         </div>
 
+                        ${renderMonitoredUpdate(plugin.update)}
                     </div>
 
 
                     <div class="plugin-actions">
 
+                        ${document.querySelector('.plugins-page')?.dataset.canManage === "true" ?
+                          `<button class="button" type="button" onclick="openPluginMonitoring(${pluginData.indexOf(plugin)})">Monitoring</button>` : ""}
                         ${renderPluginConfigActions(plugin, pluginIndex)}
 
                         <button
@@ -6312,6 +6315,20 @@ async function loadPaperVersionStatus() {
   );
   const detail = document.getElementById("paper-version-detail");
   if (!page || !detail) return;
+  if (page.classList.contains("server-overview")) {
+    try {
+      const response = await fetch(`/api/web/servers/${page.dataset.serverId}/paper/update-status`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load Paper status");
+      if (!page.isConnected) return;
+      const installed = document.getElementById("paper-installed-version");
+      if (installed) installed.textContent = data.installed_version || "Unknown";
+      detail.innerHTML = renderMonitoredUpdate(data);
+    } catch (error) {
+      detail.textContent = error.message;
+    }
+    return;
+  }
   try {
     const response = await fetch(
       `/api/web/servers/${page.dataset.serverId}/paper`,
@@ -6977,3 +6994,181 @@ setInterval(loadServerSchedules, 2500);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) loadServerSchedules();
 });
+
+
+function renderMonitoredUpdate(update) {
+  if (!update) return "";
+  const latest = escapeHtml(update.latest_version || "Unknown");
+  // Release links are constructed by providers; still restrict the browser scheme.
+  const link = update.release_url?.startsWith("https://")
+    ? `<a href="${escapeHtml(update.release_url)}" target="_blank" rel="noopener noreferrer">${latest}</a>` : latest;
+  return `<dl class="plugin-update-details">
+    ${update.monitoring ? `<div><dt>Monitoring source</dt><dd>${escapeHtml(update.monitoring.mode === "disabled" ? "Disabled" : update.monitoring.source || "Not configured")}</dd></div>` : ""}
+    ${update.monitoring?.notes ? `<div><dt>Monitoring details</dt><dd>${escapeHtml(update.monitoring.notes)}</dd></div>` : ""}
+    <div><dt>Installed</dt><dd>${escapeHtml(update.installed_version || "Unknown")}</dd></div>
+    <div><dt>Latest</dt><dd>${link}</dd></div>
+    ${update.download_url?.startsWith("https://") ? `<div><dt>Download link</dt><dd><a href="${escapeHtml(update.download_url)}" target="_blank" rel="noopener noreferrer">View download</a></dd></div>` : ""}
+    <div><dt>Update Status</dt><dd>${escapeHtml(update.status)}</dd></div>
+    <div><dt>Compatibility</dt><dd>${escapeHtml(update.compatibility)}</dd></div>
+    <div><dt>Last Checked</dt><dd>${update.checked_at ? escapeHtml(new Date(update.checked_at).toLocaleString()) : "Never"}</dd></div>
+    ${update.error ? `<div class="update-check-error"><dt>Details</dt><dd>${escapeHtml(update.error)}</dd></div>` : ""}
+  </dl>`;
+}
+
+async function checkMonitoredUpdates(button, scope) {
+  const page = button.closest("[data-server-id]");
+  if (!page) return;
+  const feedback = document.getElementById("update-check-feedback");
+  button.disabled = true;
+  if (feedback) feedback.textContent = "Checking official release sources…";
+  try {
+    const response = await fetch(`/api/web/servers/${page.dataset.serverId}/${scope}/check-updates`, {method: "POST"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to check for updates");
+    if (!page.isConnected) return;
+    if (scope === "plugins") await updatePluginsPage();
+    else await loadPaperVersionStatus();
+    if (feedback) feedback.textContent = "Check complete. See individual results for failures or unknown compatibility.";
+  } catch (error) {
+    if (feedback) feedback.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function openPluginMonitoring(index) {
+  const plugin = pluginData[index];
+  const modal = document.getElementById("plugin-monitoring-modal");
+  const page = document.querySelector(".plugins-page");
+  if (!plugin || !modal || !page) return;
+  const config = plugin.update?.monitoring || {};
+  modal.dataset.filename = plugin.filename;
+  modal.dataset.serverId = page.dataset.serverId;
+  document.getElementById("plugin-monitoring-name").textContent = plugin.name;
+  document.getElementById("plugin-monitoring-mode").value = config.mode || "disabled";
+  document.getElementById("plugin-monitoring-provider").value = config.provider || "github";
+  document.getElementById("plugin-monitoring-project").value = config.project || "";
+  for (const field of ["version", "link", "installed"]) {
+    document.getElementById(`plugin-monitoring-${field}-pattern`).value = config[`${field}_pattern`] || "";
+  }
+  document.getElementById("plugin-monitoring-error").textContent = "";
+  updatePluginMonitoringFields();
+  modal.hidden = false;
+  document.getElementById("plugin-monitoring-mode").focus();
+}
+
+function closePluginMonitoring() {
+  const modal = document.getElementById("plugin-monitoring-modal");
+  if (modal) modal.hidden = true;
+}
+
+function clearMonitoringPreview() {
+  const output = document.getElementById("plugin-monitoring-preview");
+  if (output) { output.hidden = true; output.textContent = ""; }
+}
+
+function updatePluginMonitoringFields(providerChanged = false) {
+  const mode = document.getElementById("plugin-monitoring-mode").value;
+  const enabled = mode === "custom";
+  const editable = enabled;
+  document.getElementById("plugin-monitoring-custom").hidden = !enabled;
+  document.getElementById("plugin-monitoring-provider").disabled = !editable;
+  const provider = document.getElementById("plugin-monitoring-provider").value;
+  const documentSource = ["jenkins", "custom"].includes(provider);
+  const project = document.getElementById("plugin-monitoring-project");
+  if (providerChanged) {
+    project.value = "";
+    for (const field of ["version", "link", "installed"]) document.getElementById(`plugin-monitoring-${field}-pattern`).value = "";
+  }
+  project.required = editable;
+  project.disabled = !editable;
+  const hints = {
+    github: "Enter owner/repository or its https://github.com/owner/repository URL. Checks stable releases.",
+    modrinth: "Enter a project slug, ID or Modrinth project URL. Checks stable Bukkit/Paper releases.",
+    jenkins: "Enter the public HTTPS job URL. Automatically compares successful build numbers. No expressions are needed for standard build versions or filenames.",
+    custom: "Enter a public HTTPS URL returning JSON, HTML or text. Use the final URL if the source redirects.",
+  };
+  project.placeholder = documentSource ? "https://example.org/releases" : "Project identifier or URL";
+  document.getElementById("plugin-monitoring-hint").textContent = hints[provider];
+  const version = document.getElementById("plugin-monitoring-version-pattern");
+  version.required = editable && provider === "custom";
+  document.getElementById("plugin-monitoring-expressions").open = provider !== "jenkins";
+  document.getElementById("plugin-monitoring-version-hint").textContent = provider === "jenkins"
+    ? "Optional override. Leave blank to compare Jenkins build numbers automatically. A version expression changes comparison to the extracted version."
+    : documentSource
+    ? 'Required. Match the metadata response and capture the version, for example "version"\\s*:\\s*"([^"]+)". Preview checks the first match.'
+    : "Optional. Extract a comparable version from the release tag/version number, for example ^v?([0-9.]+).";
+  document.getElementById("plugin-monitoring-link-fields").hidden = !documentSource;
+  for (const field of ["version", "link", "installed"]) {
+    document.getElementById(`plugin-monitoring-${field}-pattern`).disabled = !editable || (field === "link" && !documentSource);
+  }
+  clearMonitoringPreview();
+}
+
+function pluginMonitoringPayload() {
+  const modal = document.getElementById("plugin-monitoring-modal");
+  const provider = document.getElementById("plugin-monitoring-provider").value;
+  return {
+    filename: modal.dataset.filename,
+    mode: document.getElementById("plugin-monitoring-mode").value,
+    provider,
+    project: document.getElementById("plugin-monitoring-project").value.trim(),
+    version_pattern: document.getElementById("plugin-monitoring-version-pattern").value,
+    link_pattern: ["jenkins", "custom"].includes(provider) ? document.getElementById("plugin-monitoring-link-pattern").value : "",
+    installed_pattern: document.getElementById("plugin-monitoring-installed-pattern").value,
+  };
+}
+
+async function previewPluginMonitoring() {
+  const modal = document.getElementById("plugin-monitoring-modal");
+  const output = document.getElementById("plugin-monitoring-preview");
+  const button = document.getElementById("plugin-monitoring-preview-button");
+  const settings = pluginMonitoringPayload();
+  const fingerprint = JSON.stringify(settings);
+  button.disabled = true;
+  output.hidden = false;
+  output.textContent = "Fetching metadata and testing expressions…";
+  try {
+    const response = await fetch(`/api/web/servers/${modal.dataset.serverId}/plugins/monitoring/preview`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: fingerprint,
+    });
+    const data = await response.json();
+    if (!modal.isConnected || modal.hidden || JSON.stringify(pluginMonitoringPayload()) !== fingerprint) return;
+    if (!response.ok) throw new Error(data.error || "Preview failed");
+    output.innerHTML = `<p>Preview only — settings have not been saved.</p>
+      <p>Source: ${escapeHtml(data.source_url || "Unknown")}</p>
+      <p>Installed value used for comparison: <strong>${escapeHtml(data.installed_comparison || "Unknown")}</strong> (${escapeHtml(data.installed_comparison_source || "JAR metadata")})</p>
+      ${renderMonitoredUpdate(data)}
+      <p>Detected download link: ${data.download_url?.startsWith("https://")
+        ? `<a href="${escapeHtml(data.download_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(data.download_url)}</a>`
+        : "None — use the release/source page."}</p>`;
+  } catch (failure) {
+    if (modal.isConnected && JSON.stringify(pluginMonitoringPayload()) === fingerprint) output.textContent = failure.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function savePluginMonitoring(event) {
+  event.preventDefault();
+  const modal = document.getElementById("plugin-monitoring-modal");
+  const error = document.getElementById("plugin-monitoring-error");
+  const button = event.target.querySelector('[type="submit"]');
+  button.disabled = true;
+  error.textContent = "";
+  const settings = pluginMonitoringPayload();
+  try {
+    const response = await fetch(`/api/web/servers/${modal.dataset.serverId}/plugins/monitoring`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(settings),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to save monitoring settings");
+    if (!modal.isConnected) return;
+    closePluginMonitoring();
+    await updatePluginsPage();
+  } catch (failure) {
+    error.textContent = failure.message;
+  } finally {
+    button.disabled = false;
+  }
+}

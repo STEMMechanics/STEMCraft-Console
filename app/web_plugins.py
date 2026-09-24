@@ -236,6 +236,9 @@ def plugins_data(
 
 
     plugins = list_plugins(server)
+    from .update_monitor import plugin_results
+    for plugin, update in zip(plugins, plugin_results(db, server, plugins)):
+        plugin["update"] = update
 
     return {
         "plugins": plugins,
@@ -394,3 +397,125 @@ async def plugin_action(
         "action_requires_restart": action_requires_restart,
         "affected": len(filenames),
     }
+
+
+@router.post("/api/web/servers/{server_id}/plugins/check-updates")
+def check_plugin_updates(server_id: int, request: Request, db: Session = Depends(get_db)):
+    return _check_updates(server_id, request, db, "plugins", "plugins.manage")
+
+
+@router.post("/api/web/servers/{server_id}/paper/check-updates")
+def check_paper_updates(server_id: int, request: Request, db: Session = Depends(get_db)):
+    return _check_updates(server_id, request, db, "paper", "servers.properties")
+
+
+def _check_updates(server_id, request, db, scope, permission):
+    from .update_monitor import check_updates, CheckInProgress
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, permission):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    try:
+        results = check_updates(db, [server], force=True, scope=scope)
+        return {"updates": results[0][1]}
+    except CheckInProgress as error:
+        return JSONResponse({"error": str(error)}, status_code=409)
+
+
+@router.get("/api/web/servers/{server_id}/paper/update-status")
+def paper_update_status(server_id: int, request: Request, db: Session = Depends(get_db)):
+    from .update_monitor import paper_result
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if not server or not has_permission(user, "servers.view"):
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    return paper_result(db, server)
+
+
+@router.post('/api/web/servers/{server_id}/plugins/monitoring')
+async def save_plugin_monitoring(server_id: int, request: Request, db: Session = Depends(get_db)):
+    from datetime import datetime
+    from .models import UpdateMonitorLease
+    from .plugin_monitoring import save_monitoring_config
+    from .update_monitor import acquire_lease, CheckInProgress
+
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({'error': 'Not authenticated'}, status_code=401)
+    if not server or not has_permission(user, 'plugins.manage'):
+        return JSONResponse({'error': 'Access denied'}, status_code=403)
+    try:
+        data = await request.json()
+    except ValueError:
+        return JSONResponse({'error': 'Invalid monitoring settings'}, status_code=400)
+    if not isinstance(data, dict):
+        return JSONResponse({'error': 'Invalid monitoring settings'}, status_code=400)
+    plugin = next((item for item in list_plugins(server) if item['filename'] == data.get('filename')), None)
+    if not plugin:
+        return JSONResponse({'error': 'Installed plugin not found; reload the Plugins page'}, status_code=404)
+    try:
+        acquire_lease(db, datetime.utcnow())
+    except CheckInProgress as error:
+        return JSONResponse({'error': str(error)}, status_code=409)
+    try:
+        save_monitoring_config(db, server.id, plugin['name'], data.get('mode'),
+                               data.get('provider', ''), data.get('project', ''),
+                               data.get('version_pattern', ''), data.get('link_pattern', ''), data.get('installed_pattern', ''))
+        return {'success': True}
+    except ValueError as error:
+        return JSONResponse({'error': str(error)}, status_code=400)
+    finally:
+        db.rollback()
+        db.query(UpdateMonitorLease).filter_by(id=1).update({'expires_at': datetime.min})
+        db.commit()
+
+
+@router.post('/api/web/servers/{server_id}/plugins/monitoring/preview')
+async def preview_plugin_monitoring(server_id: int, request: Request, db: Session = Depends(get_db)):
+    from datetime import datetime
+    import json
+    from types import SimpleNamespace
+    from starlette.concurrency import run_in_threadpool
+    from .models import UpdateMonitorLease
+    from .plugin_monitoring import custom_provider
+    from .update_monitor import acquire_lease, CheckInProgress, compare_release
+    from .update_providers.http_source import SourceError
+
+    user, server = get_accessible_server(server_id, request, db)
+    if not user:
+        return JSONResponse({'error': 'Not authenticated'}, status_code=401)
+    if not server or not has_permission(user, 'plugins.manage'):
+        return JSONResponse({'error': 'Access denied'}, status_code=403)
+    try:
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise ValueError('Invalid preview settings')
+        plugin = next((item for item in list_plugins(server) if item['filename'] == data.get('filename')), None)
+        if not plugin:
+            return JSONResponse({'error': 'Installed plugin not found; reload the Plugins page'}, status_code=404)
+        provider = custom_provider(data.get('provider'), data.get('project'), data.get('version_pattern', ''),
+                                   data.get('link_pattern', ''), data.get('installed_pattern', ''))
+    except ValueError as error:
+        return JSONResponse({'error': str(error)}, status_code=400)
+    now = datetime.utcnow()
+    try:
+        acquire_lease(db, now)
+    except CheckInProgress as error:
+        return JSONResponse({'error': str(error)}, status_code=409)
+    try:
+        releases = await run_in_threadpool(provider.fetch)
+        row = SimpleNamespace(payload=json.dumps([release.to_dict() for release in releases]), checked_at=now, error=None)
+        result = compare_release(plugin['name'], plugin.get('version'), provider, row, server.minecraft_version, filename=plugin['filename'])
+        result['installed_comparison'], result['installed_comparison_source'] = provider.installed_details(plugin.get('version'), plugin['filename'])
+        result['source_url'] = provider.project
+        return result
+    except SourceError as error:
+        return JSONResponse({'error': str(error)}, status_code=400)
+    except Exception:
+        return JSONResponse({'error': 'Preview failed: the source was unavailable or returned invalid metadata'}, status_code=400)
+    finally:
+        db.rollback()
+        db.query(UpdateMonitorLease).filter_by(id=1).update({'expires_at': datetime.min})
+        db.commit()

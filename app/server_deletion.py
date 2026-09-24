@@ -5,6 +5,9 @@ from pathlib import Path
 
 from .models import (
     BackupJob,
+    ServerUpdateCheck,
+    PluginMonitoringSetting,
+    UpdateNotification,
     ScheduledTask,
     Server,
     ServerMetric,
@@ -51,6 +54,9 @@ def delete_managed_server(
         resolved.rename(staged_path)
 
     try:
+        db.query(PluginMonitoringSetting).filter_by(server_id=server.id).delete(synchronize_session=False)
+        db.query(ServerUpdateCheck).filter_by(server_id=server.id).delete(synchronize_session=False)
+        db.query(UpdateNotification).filter_by(server_id=server.id).delete(synchronize_session=False)
         db.query(TaskRun).filter(TaskRun.server_id == server.id).delete(synchronize_session=False)
         db.query(ScheduledTask).filter(ScheduledTask.server_id == server.id).delete(synchronize_session=False)
         db.query(BackupJob).filter(BackupJob.server_id == server.id).delete(synchronize_session=False)

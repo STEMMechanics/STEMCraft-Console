@@ -341,6 +341,43 @@ User access
 
 The console is intended to provide the common administration tools required to operate STEMCraft without requiring routine shell access to the server.
 
+### Plugin and Paper update monitoring
+
+The Console checks installed plugins and Paper for updates every 24 hours using
+its existing scheduled worker. The Plugins page shows installed/latest versions,
+compatibility, status and the last check, with an authorised **Check for updates**
+action. Paper monitoring appears in the server overview's Server Version card.
+**Updates are never downloaded or installed automatically.**
+
+The root `plugin-monitoring.yml` supplies editable starting settings for known
+plugins. Each plugin’s **Monitoring** form is prefilled with its provider, project
+URL and expressions; administrators can change any field or disable monitoring.
+Saving stores the displayed settings for that server. Providers include GitHub
+Releases, Modrinth, Jenkins and custom metadata URLs.
+Custom sources use bounded regular expressions to extract a version and optional
+download link. **Preview** verifies the detected values before saving. Settings
+are independent per server and survive JAR replacement with the same plugin name.
+Plugins without a source remain unmonitored. Paper uses its existing PaperMC
+integration separately.
+
+Release metadata is cached across servers. Explicitly incompatible releases are
+not advertised as updates; missing compatibility information is shown as unknown.
+
+New updates are grouped into an administrator email using the existing SMTP
+settings. Persisted per-recipient notification state prevents daily repeat emails
+for the same version. A newly published version triggers another notification.
+Manual web/CLI checks send no email by default:
+
+```bash
+python -m app.admin_cli check-updates
+python -m app.admin_cli check-updates --server Survival
+python -m app.admin_cli check-updates --notify
+```
+
+See [update monitoring administration and provider development](docs/update-monitoring.md)
+for provider mappings, build-detection limitations, caching, permissions, deployment
+and instructions for adding another plugin/source.
+
 ### Off-site Backups
 
 Scheduled backups can copy the completed local ZIP to any configured

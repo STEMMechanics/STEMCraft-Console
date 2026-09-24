@@ -55,9 +55,35 @@ def main() -> int:
     reset = subparsers.add_parser("reset-password", help="Reset a user's password")
     reset.add_argument("username", nargs="?", default="admin")
 
+    updates = subparsers.add_parser("check-updates", help="Check plugin and Paper releases (monitoring only)")
+    updates.add_argument("--server", help="Server name or numeric ID; omit for all servers")
+    updates.add_argument("--notify", action="store_true", help="Email newly discovered updates")
+    updates.add_argument("--cached", action="store_true", help="Reuse the normal six-hour upstream cache")
+
     args = parser.parse_args()
     db = SessionLocal()
     try:
+        if args.command == "check-updates":
+            from .models import Server
+            from .update_monitor import check_updates
+            servers = db.query(Server).all()
+            if args.server:
+                servers = ([server for server in servers if server.name == args.server]
+                           or [server for server in servers if str(server.id) == args.server])
+                if not servers:
+                    raise ValueError("Server not found")
+            grouped = check_updates(db, servers, force=not args.cached, notify=args.notify)
+            for server, results in grouped:
+                print(f"\n{server.name}")
+                print(f"{'Plugin':24} {'Installed':30} {'Latest':30} Status / Compatibility / Last checked")
+                for result in results:
+                    print(f"{result['plugin']:24} {str(result['installed_version'] or 'Unknown'):30} "
+                          f"{str(result['latest_version'] or 'Unknown'):30} {result['status']} / "
+                          f"{result['compatibility']} / {result['checked_at'] or 'Never'}")
+                    if result['error']:
+                        print(f"  {result['error']}")
+            return 0
+
         if args.command == "ensure-admin":
             password = ensure_initial_admin(
                 db,
@@ -74,7 +100,7 @@ def main() -> int:
         print("The user must change this password after signing in.")
         print("Two-factor authentication was disabled for account recovery.")
         return 0
-    except ValueError as error:
+    except (ValueError, RuntimeError) as error:
         print(f"Error: {error}")
         return 1
     finally:
